@@ -49,7 +49,7 @@ class ApiClient(QObject):
             request.setAttribute(QNetworkRequest.RedirectPolicyAttribute, QNetworkRequest.ManualRedirectPolicy)
             request.setAttribute(QNetworkRequest.CacheLoadControlAttribute, QNetworkRequest.AlwaysNetwork)
             request.setAttribute(QNetworkRequest.CacheSaveControlAttribute, False)
-            request.setRawHeader(b"Accept", b"application/geo+json, application/json")
+            request.setRawHeader(b"Accept", b"application/geo+json" if kind == "collections" else b"application/json")
             request.setRawHeader(b"X-Client-Id", client_id.encode("utf-8"))
             request.setRawHeader(b"X-Client-Secret", secret.encode("utf-8"))
             self._secret = secret
@@ -97,20 +97,25 @@ class ApiClient(QObject):
         self._timer.stop()
         self._read()
         status = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+        no_data = status == 404 and self._is_no_data()
         message = self._failure
         if not message:
             if status in (401, 403):
                 message = "Credenciais inválidas ou acesso não autorizado (HTTP 401/403)."
-            elif status == 404:
-                message = "Sessão ou rota não encontrada (HTTP 404)."
+            elif status == 404 and not no_data:
+                message = "Sessão ou rota não encontrada ou sem acesso (HTTP 404)."
+            elif status == 429:
+                message = "Limite de requisições excedido (HTTP 429). Aguarde antes de tentar novamente."
+            elif status == 422:
+                message = "A API recusou os parâmetros da consulta (HTTP 422)."
             elif status is not None and 300 <= status < 400:
                 message = "Redirecionamento recusado. Configure a URL final da API."
-            elif status is not None and not 200 <= status < 300:
+            elif status is not None and not 200 <= status < 300 and not no_data:
                 message = "A API retornou erro HTTP {}.".format(status)
-            elif reply.error() != QNetworkReply.NoError:
+            elif reply.error() != QNetworkReply.NoError and not no_data:
                 message = "API indisponível ou falha de rede/TLS. Verifique o acesso e tente novamente."
         payload = None
-        if not message and status != 204:
+        if not message and status != 204 and not no_data:
             try:
                 payload = json.loads(self._buffer.decode("utf-8-sig"), parse_constant=self._invalid_constant)
                 # Refuse reflected credentials before they can reach UI or disk.
@@ -133,6 +138,18 @@ class ApiClient(QObject):
     @staticmethod
     def _invalid_constant(value):
         raise ValueError("Invalid JSON constant")
+
+    def _is_no_data(self):
+        """Recognize only the documented no-data error; never display its body."""
+        if (self._kind not in ("indicators", "collections") or self._reply is None
+                or self._reply.attribute(QNetworkRequest.HttpStatusCodeAttribute) != 404):
+            return False
+        try:
+            payload = json.loads(self._buffer.decode("utf-8-sig"))
+        except (ValueError, UnicodeError, RecursionError):
+            return False
+        return (isinstance(payload, dict) and payload.get("success") is False
+                and payload.get("message") == "There is no data for the provided parameters.")
 
     def _contains_secret(self, value):
         if isinstance(value, str):

@@ -1,7 +1,7 @@
 [general]
 name=J3M Connect
 description=Cliente da API de integrações J3M para sessões, indicadores e GeoJSON.
-about=Primeira versão estrutural em desenvolvimento. Configuração segura e integração de dados com o mapa, sem regras de negócio locais. Payloads da API sujeitos a adaptação.
+about=Versão inicial em desenvolvimento. Configuração segura, sessões por UUID, indicadores dinâmicos e coletas GeoJSON com atributos opcionais, sem regras de negócio locais.
 version=0.1.0
 qgisMinimumVersion=3.28
 qgisMaximumVersion=3.99

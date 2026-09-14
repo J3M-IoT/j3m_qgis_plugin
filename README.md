@@ -26,7 +26,7 @@ As configurações globais ficam em `j3m_connect/config.json`, incluído no ZIP 
 
 ```json
 {
-  "api_url": "https://j3m-public-api-47f36ac58e86.herokuapp.com"
+  "api_url": "https://j3m-public-api-47f36ac58e86.herokuapp.com/v1"
 }
 ```
 
@@ -37,6 +37,8 @@ Após instalar, o usuário abre o plugin com **API URL** preenchida pela configu
 Uma URL personalizada e salva pela interface tem prioridade sobre `config.json`. Atualizar o pacote não substitui essa preferência já salva; nesse caso, altere a URL pela interface. Reinicie o QGIS após atualizar os arquivos do plugin. Se não houver URL salva e o arquivo estiver ausente, inválido ou sem `api_url`, o campo fica vazio e o plugin exige uma URL antes de consultar.
 
 A URL é a base da API, podendo incluir um prefixo de caminho; não inclua `/sessions`, parâmetros, fragmentos ou credenciais na URL. HTTPS é obrigatório, exceto HTTP em `localhost`, `127.0.0.1` ou `::1`, para desenvolvimento local.
+
+Os exemplos fornecidos usam o prefixo `/v1`, incluído na configuração distribuída. Para execução local conforme o documento, use `http://localhost:8014/v1`. Se já salvou a URL sem `/v1` na interface, atualize-a; a configuração global não substitui a preferência salva. O prefixo de produção segue o exemplo documentado e ainda precisa ser confirmado com a API publicada.
 
 Clique em **Salvar configuração**. O QGIS poderá solicitar a criação/desbloqueio da senha mestra. Client ID e Client Secret ficam no banco de autenticação criptografado do QGIS, em uma configuração Basic usada apenas como armazenamento. As chamadas usam os cabeçalhos `X-Client-Id` e `X-Client-Secret`, não HTTP Basic. Somente a URL e o identificador da configuração de autenticação ficam em QgsSettings. Deixe o campo de segredo vazio para manter o segredo já salvo; ele nunca é repopulado na interface. **Remover configuração** apaga essa entrada do cofre e as preferências do plugin.
 
@@ -56,7 +58,13 @@ Somente estas rotas são conhecidas:
 - `GET /sessions/{session}/indicators`
 - `GET /sessions/{session}/collections?format=geojson`
 
-**Os payloads ainda não são definitivos.** `adapters.py:session_choices` é o ponto de adaptação entre a resposta de sessões e pares internos `(identificador, texto)`. Para ensaio inicial, aceita exclusivamente uma lista JSON de identificadores textuais ou inteiros, usando o próprio identificador como texto. Objetos/envelopes são recusados com orientação explícita para adaptar a função quando o contrato real estiver disponível; não são presumidos campos `id`, `name` ou similares. `indicator_text` apresenta qualquer JSON sem definir um esquema de indicadores. O carregamento aceita GeoJSON direto (`FeatureCollection` ou `Feature`), sem presumir envelopes da API.
+Adaptação baseada em `INTEGRATION_API_EXAMPLES.md`, com exemplos de 14/09/2026. `session_choices` lê `{ "data": [...], "success": true }`, utiliza `uuid` nas requisições e `name` no seletor (UUID como texto quando o nome estiver ausente). Não utiliza o ID numérico nem exige dados do dispositivo para listar as sessões.
+
+`indicator_text` extrai `data` do mesmo envelope e apresenta todo seu conteúdo como JSON formatado. Não exige `avgs`, `condition`, `totalCollects` ou uma lista de métricas: campos novos, ausentes, nulos e estruturas aninhadas são apresentados conforme retornados, sem calcular ou preencher valores.
+
+As coletas são solicitadas exclusivamente com `format=geojson`, recebendo `FeatureCollection` direto. A leitura OGR usa `FLATTEN_NESTED_ATTRIBUTES=YES` para expor objetos como colunas, por exemplo `collects_temperatura`, sem fixar nomes de métricas. O provedor reúne os campos encontrados em todas as feições; um campo ausente em determinado registro aparece como NULL, não zero. O arquivo GeoJSON mantém o conteúdo original aninhado. Arrays e tipos heterogêneos seguem a representação do OGR; não são transformados em um esquema fixo. A opção de leitura é descrita na [documentação oficial do driver GeoJSON](https://gdal.org/en/stable/drivers/vector/geojson.html).
+
+O 404 com a mensagem documentada `There is no data for the provided parameters.` é tratado como ausência de dados nos indicadores/coletas. Outros 404 continuam sendo erro de recurso inexistente ou inacessível, sem tentar distinguir contas. Há mensagens específicas para 401/403, 422 e 429; corpos de erro do backend não são exibidos. O JSON alternativo de coletas não é usado pelo plugin.
 
 ## Desenvolvimento e validação manual
 
@@ -87,13 +95,15 @@ Verifique também a abertura/fechamento da janela, desativação do complemento,
 
 ## Estado e limitações
 
-Estrutura instalável e fluxos implementados; integração com a API real depende do contrato de sessões e de credenciais válidas. Não inclui edição, envio de coletas, criação de sessões, processamento espacial, filtros avançados, cache ou sincronização offline.
+Estrutura instalável e fluxos adaptados aos exemplos fornecidos da API; a conexão com o servidor publicado ainda depende da validação com credenciais válidas. Não inclui edição, envio de coletas, criação de sessões, processamento espacial, filtros avançados, cache ou sincronização offline.
 
 As camadas são cópias locais estáticas em GeoJSON, armazenadas em `j3m_connect/layers` dentro do perfil ativo do QGIS. Esses arquivos permanecem após fechar o plugin, permitindo reabrir projetos; não os apague enquanto houver projetos referenciando-os. Cada carregamento gera um arquivo novo. Para compartilhar um projeto, exporte/empacote também as camadas. Os dados locais não são criptografados pelo plugin. Respostas vazias não criam camadas. Coleções com geometrias mistas dependem do suporte do OGR/QGIS e não são divididas automaticamente.
 
 Distribuição local pronta. Publicação no catálogo oficial ainda requer definir e preencher email de manutenção e URL real do repositório em `metadata.txt`; estes dados não foram inventados.
 
 Validação inicial executada com PyQGIS **3.44.13** no Windows, em modo sem janela e perfil temporário: imports/sintaxe, formulário Qt, lifecycle com interface simulada, cofre de autenticação real, HTTP contra servidor local temporário e camada GeoJSON via OGR. A API J3M real e a interação visual no QGIS Desktop ainda precisam ser verificadas. As demais versões declaradas não foram executadas neste ambiente.
+
+Os exemplos fornecidos em 14/09/2026 também foram validados nesse ambiente: sessões por UUID/nome, indicadores com campos dinâmicos e GeoJSON com registros adicionais contendo métricas novas, ausentes e nulas. A verificação local confirmou as colunas OGR, a preservação do GeoJSON no disco e as respostas HTTP 401/404/422/429, incluindo a distinção de ausência de dados. Os arquivos temporários de validação não integram o repositório ou o pacote.
 
 ## Licença e referências
 

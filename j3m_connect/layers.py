@@ -40,7 +40,10 @@ def add_geojson_layer(payload, name):
     path = directory / (uuid4().hex + ".geojson")
     try:
         path.write_text(serialized, encoding="utf-8")
-        layer = QgsVectorLayer(str(path), name, "ogr")
+        # OGR discovers the union of attributes across all features. Flatten
+        # objects for numeric metric columns without imposing a metric schema.
+        uri = str(path) + "|option:FLATTEN_NESTED_ATTRIBUTES=YES"
+        layer = QgsVectorLayer(uri, name, "ogr")
         if not layer.isValid() or layer.featureCount() != len(features):
             del layer
             raise ValueError("OGR não conseguiu carregar todas as feições GeoJSON.")
