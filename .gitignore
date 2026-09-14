@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+# Editors
+.vscode/
+.idea/
+*.swp
+*~
+# Local settings, credentials and QGIS profiles/projects
+.env
+.env.*
+!.env.example
+*.local.*
+*.pem
+*.key
+qgis-auth.db*
+profiles/
+*.qgs
+*.qgz
+*.qgd
+*.qgs~
+*.qgz~
+# Build and temporary files
+build/
+dist/
+*.zip
+*.log
+*.tmp
+.tmp/
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
