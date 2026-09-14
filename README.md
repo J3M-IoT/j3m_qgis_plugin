@@ -32,21 +32,25 @@ As configurações globais ficam em `j3m_connect/config.json`, incluído no ZIP 
 
 Para alterar o backend da distribuição, edite `api_url` nesse arquivo e gere novamente o pacote com `python scripts/package.py`. O arquivo é destinado ao versionamento e contém somente configurações públicas; não coloque credenciais nele. O empacotamento verifica se existe uma URL preenchida e aceita somente a chave `api_url` nesta versão.
 
-Após instalar, o usuário abre o plugin com **API URL** preenchida pela configuração distribuída e informa **Client ID** e **Client Secret**. Não é necessário criar arquivos locais. Não há leitura de `.env` nem de variáveis de ambiente para configurar o backend, nem URL fixa no código Python.
+Após instalar, o usuário informa somente **Client ID** e **Client Secret**. A URL não aparece na janela e é lida exclusivamente do `config.json` distribuído no pacote. Não é necessário criar arquivos locais. Não há leitura de `.env` nem de variáveis de ambiente para configurar o backend, nem URL fixa no código Python.
 
-Uma URL personalizada e salva pela interface tem prioridade sobre `config.json`. Atualizar o pacote não substitui essa preferência já salva; nesse caso, altere a URL pela interface. Reinicie o QGIS após atualizar os arquivos do plugin. Se não houver URL salva e o arquivo estiver ausente, inválido ou sem `api_url`, o campo fica vazio e o plugin exige uma URL antes de consultar.
+URLs salvas por versões anteriores são ignoradas. Para trocar o backend, o mantenedor altera `config.json` e distribui o pacote atualizado. Reinicie o QGIS após atualizar os arquivos. Se a configuração de conexão estiver ausente ou inválida, o plugin orienta o usuário a contatar o responsável pelo plugin.
 
 A URL é a base da API, podendo incluir um prefixo de caminho; não inclua `/sessions`, parâmetros, fragmentos ou credenciais na URL. HTTPS é obrigatório, exceto HTTP em `localhost`, `127.0.0.1` ou `::1`, para desenvolvimento local.
 
-Os exemplos fornecidos usam o prefixo `/v1`, incluído na configuração distribuída. Para execução local conforme o documento, use `http://localhost:8014/v1`. Se já salvou a URL sem `/v1` na interface, atualize-a; a configuração global não substitui a preferência salva. O prefixo de produção segue o exemplo documentado e ainda precisa ser confirmado com a API publicada.
+Os exemplos fornecidos usam o prefixo `/v1`, incluído na configuração distribuída. Para execução local conforme o documento, use `http://localhost:8014/v1`. Configure esse endereço somente em `config.json`. O prefixo de produção segue o exemplo documentado e ainda precisa ser confirmado com a API publicada.
 
-Clique em **Salvar configuração**. O QGIS poderá solicitar a criação/desbloqueio da senha mestra. Client ID e Client Secret ficam no banco de autenticação criptografado do QGIS, em uma configuração Basic usada apenas como armazenamento. As chamadas usam os cabeçalhos `X-Client-Id` e `X-Client-Secret`, não HTTP Basic. Somente a URL e o identificador da configuração de autenticação ficam em QgsSettings. Deixe o campo de segredo vazio para manter o segredo já salvo; ele nunca é repopulado na interface. **Remover configuração** apaga essa entrada do cofre e as preferências do plugin.
+Clique em **Salvar configuração**. O QGIS poderá solicitar a criação/desbloqueio da senha mestra. Client ID e Client Secret ficam no banco de autenticação criptografado do QGIS, em uma configuração Basic usada apenas como armazenamento. As chamadas usam os cabeçalhos `X-Client-Id` e `X-Client-Secret`, não HTTP Basic. Somente o identificador da configuração de autenticação fica em QgsSettings. Deixe o campo de segredo vazio para manter o segredo já salvo; ele nunca é repopulado na interface. **Remover configuração** apaga essa entrada do cofre e as preferências do plugin.
 
 ## Utilização
 
 1. Salve a configuração e clique em **Atualizar sessões**.
 2. Selecione uma sessão para consultar seus indicadores.
 3. Clique em **Adicionar ao mapa** para buscar e carregar GeoJSON.
+
+Os pontos chegam coloridos pelo campo `markerColor` de cada coleta, aceitando hexadecimal `#RRGGBB` ou `#RGB`. Campo ausente, nulo ou inválido usa cinza. Nenhum outro campo de cor é utilizado. A simbologia fica salva junto ao projeto QGIS; camadas já carregadas antes desta alteração precisam ser adicionadas novamente para receber esse estilo.
+
+Ao adicionar uma camada, o plugin ativa as dicas de mapa do QGIS. Passe o mouse sobre um ponto da camada ativa para ver o cartão com dispositivo, condição, leituras e demais dados. O cabeçalho usa `condition.hex` (coluna `condition_hex`), com `markerColor` como alternativa e cinza se nenhuma cor for válida. As seções são construídas com os campos disponíveis; valores nulos, textos vazios e coleções vazias não aparecem, enquanto zero e falso são preservados. Métricas novas aparecem automaticamente. Unidades não fornecidas nas coletas não são presumidas nem há conversões de valores. O tooltip é salvo no projeto e usa somente HTML e expressões nativas QGIS; o GeoJSON original não é alterado.
 
 Indicadores são exibidos como JSON formatado, dinamicamente, sem cálculos nem nomes fixos. Respostas vazias, falhas de rede e erros de formato são informados na janela. Fechar a janela cancela a requisição pendente. Redirecionamentos são recusados para evitar encaminhar credenciais; configure a URL final.
 

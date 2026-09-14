@@ -25,15 +25,15 @@ def validate_url(value):
     if (not url.isValid() or not url.host()
             or url.scheme() not in ("https", "http")
             or url.userInfo() or url.hasQuery() or url.hasFragment()):
-        raise ValueError("URL inválida: informe uma base HTTP(S) sem credenciais ou parâmetros.")
+        raise ValueError("Configuração de conexão do plugin inválida. Contate o responsável pelo plugin.")
     if url.scheme() == "http" and url.host().lower() not in ("localhost", "127.0.0.1", "::1"):
-        raise ValueError("Use HTTPS para a API remota. HTTP é permitido somente em loopback local.")
+        raise ValueError("Configuração de conexão do plugin insegura. Contate o responsável pelo plugin.")
     return url.toString(QUrl.FullyEncoded).rstrip("/")
 
 
 def preferences():
     settings = QgsSettings()
-    return (settings.value(PREFIX + "url", "", type=str) or configured_api_url(),
+    return (configured_api_url(),
             settings.value(PREFIX + "authcfg", "", type=str))
 
 
@@ -55,8 +55,8 @@ def _load(authcfg):
 
 def credentials():
     url, authcfg = preferences()
-    if not url or not authcfg:
-        raise ValueError("Configuração incompleta. Salve URL, Client ID e Client Secret.")
+    if not authcfg:
+        raise ValueError("Configuração incompleta. Salve Client ID e Client Secret.")
     url = validate_url(url)
     config = _load(authcfg)
     client_id, secret = config.config("username"), config.config("password")
@@ -71,8 +71,8 @@ def _validate_credentials(client_id, secret):
         raise ValueError("As credenciais não podem conter caracteres de controle.")
 
 
-def save(url, client_id, secret):
-    url = validate_url(url)
+def save(client_id, secret):
+    url = validate_url(configured_api_url())
     client_id = client_id.strip()
     _, authcfg = preferences()
     if not secret and authcfg:
@@ -93,7 +93,7 @@ def save(url, client_id, secret):
     if not success:
         raise ValueError("Não foi possível salvar as credenciais no cofre QGIS.")
     settings = QgsSettings()
-    settings.setValue(PREFIX + "url", url)
+    settings.remove(PREFIX + "url")
     settings.setValue(PREFIX + "authcfg", config.id())
 
 

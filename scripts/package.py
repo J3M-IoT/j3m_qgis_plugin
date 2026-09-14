@@ -20,7 +20,7 @@ def main():
     output.parent.mkdir(exist_ok=True)
     files = ["__init__.py", "metadata.txt", "j3m_connect.py", "api.py",
              "adapters.py", "settings.py", "layers.py", "dialog.py", "dialog.ui", "icon.png",
-             "config.json"]
+             "config.json", "map_tips.py"]
     with ZipFile(output, "w", ZIP_DEFLATED) as archive:
         for name in files:
             archive.write(plugin / name, "j3m_connect/" + name)

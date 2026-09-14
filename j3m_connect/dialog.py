@@ -23,7 +23,6 @@ class J3MDialog(QDialog, FORM_CLASS):
         self._busy = False
         self._dirty = False
         self._loaded = False
-        self.urlEdit.setText(settings.preferences()[0])
         for button in self.findChildren(QPushButton):
             button.setAutoDefault(False)
         self.saveButton.clicked.connect(self._save)
@@ -35,7 +34,7 @@ class J3MDialog(QDialog, FORM_CLASS):
         self.api.busyChanged.connect(self._set_busy)
         self.api.failed.connect(self._error)
         self.api.received.connect(self._received)
-        for edit in (self.urlEdit, self.clientEdit, self.secretEdit):
+        for edit in (self.clientEdit, self.secretEdit):
             edit.textEdited.connect(self._edited)
 
     def showEvent(self, event):
@@ -64,9 +63,8 @@ class J3MDialog(QDialog, FORM_CLASS):
 
     def _save(self):
         try:
-            settings.save(self.urlEdit.text(), self.clientEdit.text(), self.secretEdit.text())
+            settings.save(self.clientEdit.text(), self.secretEdit.text())
             self.secretEdit.clear()
-            self.urlEdit.setText(settings.preferences()[0])
             self._dirty = False
             self._clear_sessions()
             self.statusLabel.setText("Configuração salva no QGIS. Atualize as sessões.")
@@ -76,7 +74,6 @@ class J3MDialog(QDialog, FORM_CLASS):
     def _remove(self):
         try:
             settings.remove()
-            self.urlEdit.clear()
             self.clientEdit.clear()
             self.secretEdit.clear()
             self._dirty = False
@@ -143,6 +140,7 @@ class J3MDialog(QDialog, FORM_CLASS):
                     self.statusLabel.setText("Nenhuma coleta disponível.")
                 else:
                     self.iface.setActiveLayer(layer)
+                    self.iface.actionMapTips().setChecked(True)
                     self.statusLabel.setText("Camada adicionada ao mapa e salva no perfil QGIS.")
         except ValueError as error:
             self._error(str(error))

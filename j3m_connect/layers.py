@@ -5,7 +5,12 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-from qgis.core import QgsApplication, QgsProject, QgsVectorLayer
+from qgis.core import (
+    QgsApplication, QgsMarkerSymbol, QgsProject, QgsProperty,
+    QgsSingleSymbolRenderer, QgsSymbolLayer, QgsVectorLayer, QgsWkbTypes,
+)
+
+from .map_tips import configure_map_tip
 
 
 def add_geojson_layer(payload, name):
@@ -47,11 +52,33 @@ def add_geojson_layer(payload, name):
         if not layer.isValid() or layer.featureCount() != len(features):
             del layer
             raise ValueError("OGR não conseguiu carregar todas as feições GeoJSON.")
+        _style_points(layer)
+        configure_map_tip(layer)
         QgsProject.instance().addMapLayer(layer)
         return layer
     except Exception:
         path.unlink(missing_ok=True)
         raise
+
+
+def _style_points(layer):
+    """Use only the backend markerColor hex; missing/invalid values stay gray."""
+    if layer.geometryType() != QgsWkbTypes.PointGeometry:
+        return
+    symbol = QgsMarkerSymbol.createSimple({
+        "name": "circle", "size": "3", "color": "#808080",
+        "outline_color": "#ffffff", "outline_width": "0.2",
+    })
+    if layer.fields().indexFromName("markerColor") >= 0:
+        expression = (
+            "CASE WHEN regexp_match(trim(to_string(\"markerColor\")), "
+            "'^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$') "
+            "THEN trim(to_string(\"markerColor\")) ELSE '#808080' END"
+        )
+        symbol.symbolLayer(0).setDataDefinedProperty(
+            QgsSymbolLayer.PropertyFillColor, QgsProperty.fromExpression(expression),
+        )
+    layer.setRenderer(QgsSingleSymbolRenderer(symbol))
 
 
 def _validate_geometry(geometry):

@@ -109,7 +109,7 @@ class ApiClient(QObject):
             elif status == 422:
                 message = "A API recusou os parâmetros da consulta (HTTP 422)."
             elif status is not None and 300 <= status < 400:
-                message = "Redirecionamento recusado. Configure a URL final da API."
+                message = "Redirecionamento recusado. Contate o responsável pela configuração do plugin."
             elif status is not None and not 200 <= status < 300 and not no_data:
                 message = "A API retornou erro HTTP {}.".format(status)
             elif reply.error() != QNetworkReply.NoError and not no_data:

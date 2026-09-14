@@ -8,13 +8,11 @@
    <item><widget class="QGroupBox" name="configGroup">
     <property name="title"><string>Configuração de acesso</string></property>
     <layout class="QFormLayout" name="configLayout">
-     <item row="0" column="0"><widget class="QLabel" name="urlLabel"><property name="text"><string>API URL</string></property><property name="buddy"><cstring>urlEdit</cstring></property></widget></item>
-     <item row="0" column="1"><widget class="QLineEdit" name="urlEdit"><property name="placeholderText"><string>https://servidor/base-da-api</string></property></widget></item>
-     <item row="1" column="0"><widget class="QLabel" name="clientLabel"><property name="text"><string>Client ID</string></property><property name="buddy"><cstring>clientEdit</cstring></property></widget></item>
-     <item row="1" column="1"><widget class="QLineEdit" name="clientEdit"/></item>
-     <item row="2" column="0"><widget class="QLabel" name="secretLabel"><property name="text"><string>Client Secret</string></property><property name="buddy"><cstring>secretEdit</cstring></property></widget></item>
-     <item row="2" column="1"><widget class="QLineEdit" name="secretEdit"><property name="echoMode"><enum>QLineEdit::Password</enum></property><property name="placeholderText"><string>Vazio mantém o segredo salvo</string></property></widget></item>
-     <item row="3" column="0" colspan="2"><layout class="QHBoxLayout" name="configButtons">
+     <item row="0" column="0"><widget class="QLabel" name="clientLabel"><property name="text"><string>Client ID</string></property><property name="buddy"><cstring>clientEdit</cstring></property></widget></item>
+     <item row="0" column="1"><widget class="QLineEdit" name="clientEdit"/></item>
+     <item row="1" column="0"><widget class="QLabel" name="secretLabel"><property name="text"><string>Client Secret</string></property><property name="buddy"><cstring>secretEdit</cstring></property></widget></item>
+     <item row="1" column="1"><widget class="QLineEdit" name="secretEdit"><property name="echoMode"><enum>QLineEdit::Password</enum></property><property name="placeholderText"><string>Vazio mantém o segredo salvo</string></property></widget></item>
+     <item row="2" column="0" colspan="2"><layout class="QHBoxLayout" name="configButtons">
       <item><widget class="QPushButton" name="saveButton"><property name="text"><string>Salvar configuração</string></property></widget></item>
       <item><widget class="QPushButton" name="removeButton"><property name="text"><string>Remover configuração</string></property></widget></item>
      </layout></item>
