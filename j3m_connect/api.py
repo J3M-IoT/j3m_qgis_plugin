@@ -40,24 +40,29 @@ class ApiClient(QObject):
                     raise ValueError("Selecione uma sessão válida.")
                 segment = bytes(QUrl.toPercentEncoding(str(session))).decode("ascii")
                 path += "/" + segment + "/" + kind
-            url = QUrl(base + path, QUrl.StrictMode)
+
+            url = QUrl(base + path, QUrl.ParsingMode.StrictMode)
+
             if kind == "collections":
                 query = QUrlQuery()
                 query.addQueryItem("format", "geojson")
                 url.setQuery(query)
+
             request = QNetworkRequest(url)
+
             request.setAttribute(
-                QNetworkRequest.RedirectPolicyAttribute,
-                QNetworkRequest.ManualRedirectPolicy,
+                QNetworkRequest.Attribute.RedirectPolicyAttribute,
+                QNetworkRequest.RedirectPolicy.ManualRedirectPolicy,
             )
             request.setAttribute(
-                QNetworkRequest.CacheLoadControlAttribute,
-                QNetworkRequest.AlwaysNetwork,
+                QNetworkRequest.Attribute.CacheLoadControlAttribute,
+                QNetworkRequest.CacheLoadControl.AlwaysNetwork,
             )
             request.setAttribute(
-                QNetworkRequest.CacheSaveControlAttribute,
+                QNetworkRequest.Attribute.CacheSaveControlAttribute,
                 False,
             )
+
             request.setRawHeader(
                 b"Accept",
                 b"application/geo+json"
@@ -72,26 +77,32 @@ class ApiClient(QObject):
                 b"X-Client-Secret",
                 secret.encode("utf-8"),
             )
+
             self._secret = secret
             self._kind = kind
             self._failure = ""
             self._buffer.clear()
+
             self._reply = QgsNetworkAccessManager.instance().get(request)
             self._reply.readyRead.connect(self._read)
             self._reply.finished.connect(self._finished)
+
             self.busyChanged.emit(True)
             self._timer.start(30000)
+
         except ValueError as error:
             self.failed.emit(str(error))
 
     def cancel(self):
         self._timer.stop()
+
         if self._reply is not None:
             reply, self._reply = self._reply, None
             reply.readyRead.disconnect(self._read)
             reply.finished.disconnect(self._finished)
             reply.abort()
             reply.deleteLater()
+
         self._buffer.clear()
         self._secret = None
         self.busyChanged.emit(False)
@@ -104,7 +115,9 @@ class ApiClient(QObject):
     def _read(self):
         if self._reply is None:
             return
+
         self._buffer.extend(bytes(self._reply.readAll()))
+
         if len(self._buffer) > MAX_BYTES:
             self._failure = (
                 "A resposta excede o limite de 20 MiB desta versão."
@@ -121,8 +134,9 @@ class ApiClient(QObject):
         self._read()
 
         status = reply.attribute(
-            QNetworkRequest.HttpStatusCodeAttribute
+            QNetworkRequest.Attribute.HttpStatusCodeAttribute
         )
+
         no_data = status == 404 and self._is_no_data()
         message = self._failure
 
@@ -159,7 +173,7 @@ class ApiClient(QObject):
             ):
                 message = "A API retornou erro HTTP {}.".format(status)
             elif (
-                reply.error() != QNetworkReply.NoError
+                reply.error() != QNetworkReply.NetworkError.NoError
                 and not no_data
             ):
                 message = (
@@ -208,7 +222,7 @@ class ApiClient(QObject):
             self._kind not in ("indicators", "collections")
             or self._reply is None
             or self._reply.attribute(
-                QNetworkRequest.HttpStatusCodeAttribute
+                QNetworkRequest.Attribute.HttpStatusCodeAttribute
             ) != 404
         ):
             return False

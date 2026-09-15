@@ -63,7 +63,7 @@ def add_geojson_layer(payload, name):
 
 def _style_points(layer):
     """Use only the backend markerColor hex; missing/invalid values stay gray."""
-    if layer.geometryType() != QgsWkbTypes.PointGeometry:
+    if layer.geometryType() != QgsWkbTypes.GeometryType.PointGeometry:
         return
     symbol = QgsMarkerSymbol.createSimple({
         "name": "circle", "size": "3", "color": "#808080",
@@ -76,7 +76,8 @@ def _style_points(layer):
             "THEN trim(to_string(\"markerColor\")) ELSE '#808080' END"
         )
         symbol.symbolLayer(0).setDataDefinedProperty(
-            QgsSymbolLayer.PropertyFillColor, QgsProperty.fromExpression(expression),
+            QgsSymbolLayer.Property.PropertyFillColor,
+            QgsProperty.fromExpression(expression),
         )
     layer.setRenderer(QgsSingleSymbolRenderer(symbol))
 
@@ -92,22 +93,36 @@ def _validate_geometry(geometry):
         for child in geometries:
             _validate_geometry(child)
         return
-    depths = {"Point": 0, "MultiPoint": 1, "LineString": 1,
-              "MultiLineString": 2, "Polygon": 2, "MultiPolygon": 3}
+    depths = {
+        "Point": 0,
+        "MultiPoint": 1,
+        "LineString": 1,
+        "MultiLineString": 2,
+        "Polygon": 2,
+        "MultiPolygon": 3,
+    }
     if kind not in depths:
         raise ValueError("Tipo de geometria GeoJSON inválido.")
     coordinates = geometry.get("coordinates")
     _validate_coordinates(coordinates, depths[kind])
-    lines = ([coordinates] if kind == "LineString" else
-             coordinates if kind == "MultiLineString" else [])
+    lines = (
+        [coordinates] if kind == "LineString"
+        else coordinates if kind == "MultiLineString"
+        else []
+    )
     if any(len(line) < 2 for line in lines):
         raise ValueError("LineString deve conter pelo menos duas posições.")
-    polygons = ([coordinates] if kind == "Polygon" else
-                coordinates if kind == "MultiPolygon" else [])
+    polygons = (
+        [coordinates] if kind == "Polygon"
+        else coordinates if kind == "MultiPolygon"
+        else []
+    )
     for polygon in polygons:
         for ring in polygon:
             if len(ring) < 4 or ring[0] != ring[-1]:
-                raise ValueError("Anel de Polygon deve ser fechado e ter pelo menos quatro posições.")
+                raise ValueError(
+                    "Anel de Polygon deve ser fechado e ter pelo menos quatro posições."
+                )
 
 
 def _validate_coordinates(value, depth):
@@ -116,5 +131,8 @@ def _validate_coordinates(value, depth):
     if depth:
         for child in value:
             _validate_coordinates(child, depth - 1)
-    elif len(value) < 2 or any(isinstance(n, bool) or not isinstance(n, (int, float)) for n in value):
+    elif len(value) < 2 or any(
+        isinstance(n, bool) or not isinstance(n, (int, float))
+        for n in value
+    ):
         raise ValueError("Posição GeoJSON inválida.")
