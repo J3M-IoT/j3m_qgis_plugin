@@ -1,13 +1,15 @@
 [general]
 name=J3M IoT Connector
-description=Cliente da API de integrações do J3M para sessões, coletas, indicadores e GeoJSON.
-about=Versão inicial em desenvolvimento. Configuração segura, sessões por UUID, indicadores dinâmicos e coletas GeoJSON com atributos opcionais, sem regras de negócio locais.
-version=1.0.0
+description=Connect QGIS to J3M IoT data, collection sessions, and environmental indicators for geoprocessing and microclimate analysis.
+about=J3M IoT Connector integrates QGIS with the J3M platform, providing direct access to georeferenced IoT data, collection sessions, and indicators focused on geoprocessing and microclimate analysis.
+version=1.0.1
 qgisMinimumVersion=3.28
 qgisMaximumVersion=3.99
 author=J3M IoT
 email=jefferrson.frade@gmail.com
+homepage=http://j3m-iot.com.br
 repository=https://github.com/J3M-IoT/j3m_qgis_plugin
+tracker=https://github.com/J3M-IoT/j3m_qgis_plugin/issues
 category=Web
 icon=j3m-logo.jpeg
 experimental=True
@@ -15,3 +17,4 @@ deprecated=False
 hasProcessingProvider=False
 server=False
 tags=j3m,api,geojson
+license=GNU AGPL v3
