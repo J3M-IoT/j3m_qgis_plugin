@@ -19,7 +19,7 @@ def main():
     output = root / "dist" / ("j3m_connect-" + version + ".zip")
     output.parent.mkdir(exist_ok=True)
     files = ["__init__.py", "metadata.txt", "j3m_connect.py", "api.py",
-             "adapters.py", "settings.py", "layers.py", "dialog.py", "dialog.ui", "icon.png",
+             "adapters.py", "settings.py", "layers.py", "dialog.py", "dialog.ui", "j3m-logo.jpeg",
              "config.json", "map_tips.py"]
     with ZipFile(output, "w", ZIP_DEFLATED) as archive:
         for name in files:

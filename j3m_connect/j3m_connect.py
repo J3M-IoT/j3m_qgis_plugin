@@ -19,7 +19,7 @@ class J3MConnect:
         if self.action is not None:
             return
         self.action = QAction(
-            QIcon(str(Path(__file__).with_name("icon.png"))),
+            QIcon(str(Path(__file__).with_name("j3m-logo.jpeg"))),
             "J3M Connect", self.iface.mainWindow(),
         )
         self.action.triggered.connect(self.run)
