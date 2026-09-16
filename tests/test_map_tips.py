@@ -5,22 +5,25 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from qgis.core import (QgsApplication, QgsExpression, QgsExpressionContext,
+from qgis.core import (Qgis, QgsApplication, QgsExpression, QgsExpressionContext,
                        QgsFeature, QgsField, QgsVectorLayer)
-from qgis.PyQt.QtCore import QVariant
+from qgis.PyQt.QtCore import QMetaType, QVariant
 from j3m_connect.map_tips import configure_map_tip
 
 
 class MapTipTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.app = QgsApplication([], False)
+        cls.app = QgsApplication.instance() or QgsApplication([], False)
         cls.app.initQgis()
 
     def render(self, values):
         layer = QgsVectorLayer('Point', 'test', 'memory')
+        # QgsField accepts QMetaType since QGIS 3.38; preserve QGIS 3.28 support.
+        types = QMetaType.Type if Qgis.QGIS_VERSION_INT >= 33800 else QVariant.Type
+        string_type = types.QString if Qgis.QGIS_VERSION_INT >= 33800 else types.String
         layer.dataProvider().addAttributes([
-            QgsField(key, QVariant.Bool if isinstance(value, bool) else QVariant.String)
+            QgsField(key, types.Bool if isinstance(value, bool) else string_type)
             for key, value in values.items()])
         layer.updateFields()
         feature = QgsFeature(layer.fields())

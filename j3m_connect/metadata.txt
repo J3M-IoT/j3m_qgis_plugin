@@ -2,9 +2,9 @@
 name=J3M IoT Connector
 description=Connect QGIS to J3M IoT data, collection sessions, and environmental indicators for geoprocessing and microclimate analysis.
 about=J3M IoT Connector integrates QGIS with the J3M platform, providing direct access to georeferenced IoT data, collection sessions, and indicators focused on geoprocessing and microclimate analysis.
-version=1.0.2
+version=1.1.0
 qgisMinimumVersion=3.28
-qgisMaximumVersion=3.99
+qgisMaximumVersion=4.99
 author=J3M IoT
 email=jefferrson.frade@gmail.com
 homepage=http://j3m-iot.com.br
@@ -18,3 +18,4 @@ hasProcessingProvider=False
 server=False
 tags=j3m,api,geojson
 license=GNU AGPL v3
+supportsQt6=True

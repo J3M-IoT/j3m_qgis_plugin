@@ -4,7 +4,10 @@
 from pathlib import Path
 
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction
+try:
+    from qgis.PyQt.QtGui import QAction  # Qt 6
+except ImportError:
+    from qgis.PyQt.QtWidgets import QAction  # Qt 5
 
 from .dialog import J3MDialog
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.0
+
+- Import de QAction compatível com Qt5/Qt6 e metadata permitindo QGIS 4.x.
+- Testes de campos migrados para QMetaType em QGIS recente, mantendo fallback para QGIS 3.28.
+- Cobertura do carregamento/descarregamento do plugin e da simbologia de pontos.
+
+- Menu lateral para sessões, coletas por dispositivo, geocercas, clusters e conexão.
+- Credenciais no cofre QGIS, com opção de mostrar o Secret digitado.
+- Busca de registros, período com fuso explícito e indicadores em tabela.
+- Mínimos/máximos de geocercas e polígonos com a cor cadastrada.
+- GeoJSON dos quatro escopos diretamente no mapa.
+- 18 testes locais aprovados no QGIS 3.44; API autenticada pendente de validação integrada.
+
+
 ## 0.1.0 — em desenvolvimento
 
 - Estrutura inicial instalável do J3M Connect para QGIS 3.

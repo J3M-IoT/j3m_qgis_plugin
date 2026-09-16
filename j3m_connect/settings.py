@@ -136,7 +136,10 @@ def save(client_id, secret):
     _, authcfg = preferences()
 
     if not secret and authcfg:
-        secret = _load(authcfg).config("password")
+        previous = _load(authcfg)
+        if previous.config("username") != client_id:
+            raise ValueError("Informe o Client Secret ao trocar o Client ID.")
+        secret = previous.config("password")
 
     _validate_credentials(client_id, secret)
 

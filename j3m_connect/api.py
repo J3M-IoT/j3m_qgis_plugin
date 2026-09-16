@@ -28,14 +28,16 @@ class ApiClient(QObject):
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._timeout)
 
-    def get(self, kind, session=None):
+    def get(self, kind, session=None, scope="sessions", period=None):
         self.cancel()
         try:
             base, client_id, secret = credentials()
-            if kind not in ("sessions", "indicators", "collections"):
+            if scope not in ("sessions", "devices", "clusters", "geofences"):
+                raise ValueError("Recurso de API desconhecido.")
+            if kind not in ("sessions", "catalog", "indicators", "collections", "table"):
                 raise ValueError("Operação de API desconhecida.")
-            path = "/sessions"
-            if kind != "sessions":
+            path = "/" + scope
+            if kind not in ("sessions", "catalog"):
                 if session is None or not str(session) or str(session) in (".", ".."):
                     raise ValueError("Selecione uma sessão válida.")
                 segment = bytes(QUrl.toPercentEncoding(str(session))).decode("ascii")
@@ -43,10 +45,15 @@ class ApiClient(QObject):
 
             url = QUrl(base + path, QUrl.ParsingMode.StrictMode)
 
+            query = QUrlQuery()
+            if scope != "sessions" and kind not in ("catalog", "sessions"):
+                if not period or len(period) != 2 or period[1] <= period[0]:
+                    raise ValueError("Informe um período com fim posterior ao início.")
+                query.addQueryItem("start_date", period[0])
+                query.addQueryItem("end_date", period[1])
             if kind == "collections":
-                query = QUrlQuery()
                 query.addQueryItem("format", "geojson")
-                url.setQuery(query)
+            url.setQuery(query)
 
             request = QNetworkRequest(url)
 
@@ -148,7 +155,7 @@ class ApiClient(QObject):
                 )
             elif status == 404 and not no_data:
                 message = (
-                    "Sessão ou rota não encontrada ou sem acesso "
+                    "Recurso ou rota não encontrada, sem dados ou sem acesso "
                     "(HTTP 404)."
                 )
             elif status == 429:
@@ -219,7 +226,7 @@ class ApiClient(QObject):
     def _is_no_data(self):
         """Recognize only the documented no-data error; never display its body."""
         if (
-            self._kind not in ("indicators", "collections")
+            self._kind not in ("indicators", "collections", "table")
             or self._reply is None
             or self._reply.attribute(
                 QNetworkRequest.Attribute.HttpStatusCodeAttribute
@@ -238,7 +245,7 @@ class ApiClient(QObject):
             isinstance(payload, dict)
             and payload.get("success") is False
             and payload.get("message")
-            == "There is no data for the provided parameters."
+            in ("There is no data for the provided parameters.", "No data found.")
         )
 
     def _contains_secret(self, value):
