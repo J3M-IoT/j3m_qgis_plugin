@@ -47,13 +47,21 @@ Clique em **Salvar e conectar**. O QGIS poderá solicitar a criação/desbloquei
 
 ## Utilização
 
-1. No menu **Conexão**, informe Client ID e Client Secret e clique em **Salvar e conectar**. É possível mostrar o Secret digitado; ao trocar o Client ID, informe também o novo Secret.
-2. Escolha **Sessões**, **Coletas por dispositivo**, **Geocercas** ou **Clusters** no menu lateral. Busque por nome/UUID, selecione o registro e use **Atualizar registros** para renovar o catálogo.
+1. Em **Configurações → Conexão**, informe Client ID e Client Secret e clique em **Salvar e conectar**. É possível mostrar o Secret digitado; ao trocar o Client ID, informe também o novo Secret.
+2. O menu lateral tem grupos expansíveis na ordem **Dispositivos**, **Sessões**, **Clusters**, **Geocercas** e **Configurações**. Nos três primeiros, abra **Coletas e indicadores**; em **Geocercas**, abra **Dashboard**. Busque por nome/UUID, selecione o registro e use **Atualizar registros** para renovar o catálogo. **Geocercas → Geocercas no mapa** abre a seleção independente de polígonos.
 3. Sessões consultam indicadores automaticamente. Nas demais áreas, escolha início/fim e clique em **Consultar indicadores**. As datas usam o fuso exibido do dispositivo/cluster; geocercas usam UTC.
 4. Veja total, condição e médias na tabela. Geocercas apresentam também mínimos e máximos.
 5. **Adicionar coletas ao mapa** carrega o GeoJSON diretamente, sem pré-visualização em textarea. **Adicionar limite da geocerca ao mapa** cria seu polígono WGS 84 na cor cadastrada.
 
 Alterar registro ou período limpa os indicadores anteriores. Cada adição cria uma nova camada persistida no perfil QGIS.
+
+### Geocercas no mapa
+
+A seção **Geocercas no mapa** é independente do dashboard **Geocercas**: possui catálogo, seleção e requisições próprios, sem consultar indicadores, períodos ou coletas. Atualize a lista, busque por nome/UUID e marque as geocercas desejadas. **Marcar todas as visíveis** respeita a busca; **Desmarcar todas** limpa também as marcações ocultas. O contador informa quantas selecionadas estão fora do filtro; elas também serão adicionadas.
+
+**Adicionar selecionadas ao QGIS** cria uma camada e um arquivo GeoJSON separados para cada geocerca. A borda é sólida e o preenchimento tem 25% de opacidade. Ambos usam `color`; se o catálogo fornecer cores distintas, a borda usa `borderColor` ou `strokeColor` e o fundo usa `fillColor` ou `backgroundColor`. Cores ausentes ou inválidas usam a cor base, com verde como alternativa. O tooltip nativo mostra somente o nome: ative a camada desejada e passe o mouse sobre a geocerca com as dicas de mapa habilitadas. As cores e o tooltip são preservados ao salvar o projeto.
+
+Geocercas inválidas são informadas individualmente e continuam marcadas para nova tentativa; as adicionadas são desmarcadas. A interface usa `qgis.PyQt` e enums com escopo compatíveis com Qt5/Qt6. Os testes desta funcionalidade foram executados no QGIS 3.44; QGIS 4/Qt6 ainda precisa de validação em execução.
 
 Os pontos chegam coloridos pelo campo `markerColor` de cada coleta, aceitando hexadecimal `#RRGGBB` ou `#RGB`. Campo ausente, nulo ou inválido usa cinza. Nenhum outro campo de cor é utilizado. A simbologia fica salva junto ao projeto QGIS; camadas já carregadas antes desta alteração precisam ser adicionadas novamente para receber esse estilo.
 

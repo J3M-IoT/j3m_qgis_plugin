@@ -4,16 +4,18 @@
 import json
 from pathlib import Path
 from uuid import uuid4
+from qgis.PyQt.QtGui import QColor
 
 from qgis.core import (
-    QgsApplication, QgsMarkerSymbol, QgsProject, QgsProperty,
+    Qgis, QgsApplication, QgsFillSymbol, QgsMarkerSymbol, QgsProject, QgsProperty,
     QgsSingleSymbolRenderer, QgsSymbolLayer, QgsVectorLayer, QgsWkbTypes,
 )
 
-from .map_tips import configure_map_tip
+from .map_tips import configure_map_tip, _text
+from .adapters import geofence_geojson
 
 
-def add_geojson_layer(payload, name):
+def add_geojson_layer(payload, name, *, geofence=False):
     """Return the added layer, or None for an empty FeatureCollection."""
     if not isinstance(payload, dict):
         raise ValueError("GeoJSON deve ser um objeto Feature ou FeatureCollection.")
@@ -52,8 +54,11 @@ def add_geojson_layer(payload, name):
         if not layer.isValid() or layer.featureCount() != len(features):
             del layer
             raise ValueError("OGR não conseguiu carregar todas as feições GeoJSON.")
-        _style_points(layer)
-        configure_map_tip(layer)
+        if geofence:
+            _style_geofence(layer, features[0]['properties'])
+        else:
+            _style_points(layer)
+            configure_map_tip(layer)
         QgsProject.instance().addMapLayer(layer)
         return layer
     except Exception:
@@ -61,9 +66,33 @@ def add_geojson_layer(payload, name):
         raise
 
 
+def add_geofence_layer(record):
+    return add_geojson_layer(geofence_geojson(record), 'J3M — ' + record['name'], geofence=True)
+
+
+def _style_geofence(layer, record):
+    def color(value, fallback):
+        result = QColor(value) if isinstance(value, str) else QColor()
+        return result if result.isValid() else QColor(fallback)
+
+    base = color(record.get('color'), '#16a34a')
+    border = color(record.get('borderColor') or record.get('strokeColor'), base)
+    fill = color(record.get('fillColor') or record.get('backgroundColor'), base)
+    symbol = QgsFillSymbol.createSimple({
+        'color': '{},{},{},64'.format(fill.red(), fill.green(), fill.blue()),
+        'outline_color': border.name(), 'outline_style': 'solid', 'outline_width': '0.5',
+    })
+    layer.setRenderer(QgsSingleSymbolRenderer(symbol))
+    layer.setDisplayExpression('"name"')
+    layer.setMapTipTemplate('<div style="padding:6px"><strong>Geocerca: </strong>[% ' + _text('name') + ' %]</div>')
+    if hasattr(layer, 'setMapTipsEnabled'):
+        layer.setMapTipsEnabled(True)
+
+
 def _style_points(layer):
     """Use only the backend markerColor hex; missing/invalid values stay gray."""
-    if layer.geometryType() != QgsWkbTypes.GeometryType.PointGeometry:
+    point_type = Qgis.GeometryType.Point if hasattr(Qgis, 'GeometryType') else QgsWkbTypes.GeometryType.PointGeometry
+    if layer.geometryType() != point_type:
         return
     symbol = QgsMarkerSymbol.createSimple({
         "name": "circle", "size": "3", "color": "#808080",
@@ -75,8 +104,11 @@ def _style_points(layer):
             "'^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$') "
             "THEN trim(to_string(\"markerColor\")) ELSE '#808080' END"
         )
+        fill_property = (QgsSymbolLayer.Property.FillColor
+                         if hasattr(QgsSymbolLayer.Property, 'FillColor')
+                         else QgsSymbolLayer.Property.PropertyFillColor)
         symbol.symbolLayer(0).setDataDefinedProperty(
-            QgsSymbolLayer.Property.PropertyFillColor,
+            fill_property,
             QgsProperty.fromExpression(expression),
         )
     layer.setRenderer(QgsSingleSymbolRenderer(symbol))

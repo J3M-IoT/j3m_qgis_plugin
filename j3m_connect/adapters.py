@@ -88,4 +88,5 @@ def geofence_geojson(record):
     if ring[-1] != ring[0]:
         ring.append(ring[0])
     return {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [ring]},
-            "properties": {key: record.get(key) for key in ("uuid", "name", "color")}}
+            "properties": {key: record.get(key) for key in (
+                "uuid", "name", "color", "borderColor", "strokeColor", "fillColor", "backgroundColor")}}

@@ -164,7 +164,7 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(dialog.pages.currentIndex(), 1)
             dialog._loaded = True
             for index, scope in enumerate(('sessions', 'devices', 'geofences', 'clusters')):
-                dialog.menu.setCurrentRow(index)
+                dialog._select_menu(scope)
                 self.assertEqual(dialog.api.calls[-1][1]['scope'], scope)
                 dialog._received('catalog', {'success': True, 'data': [
                     {'uuid': scope + '-id', 'name': 'Sensor', 'timezone': 'America/Sao_Paulo'}]})

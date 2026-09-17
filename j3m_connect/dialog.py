@@ -4,7 +4,7 @@ from qgis.PyQt.QtCore import QDateTime, Qt
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDateTimeEdit, QDialog,
-    QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
+    QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QTreeWidget, QTreeWidgetItem,
     QPushButton, QStackedWidget, QTableWidget, QTableWidgetItem, QVBoxLayout,
     QWidget,
 )
@@ -12,9 +12,19 @@ from . import settings
 from .adapters import catalog_records, geofence_geojson, indicator_rows, _response_data
 from .api import ApiClient
 from .layers import add_geojson_layer
+from .geofences import GeofencesPage
 
-SCOPES = ('sessions', 'devices', 'geofences', 'clusters')
-TITLES = ('Sessões', 'Coletas por dispositivo', 'Geocercas', 'Clusters')
+TITLES = {'devices': 'Dispositivos — Coletas e indicadores',
+          'sessions': 'Sessões — Coletas e indicadores',
+          'clusters': 'Clusters — Coletas e indicadores',
+          'geofences': 'Geocercas — Dashboard'}
+MENU = (
+    ('Dispositivos', (('Coletas e indicadores', 'devices'),)),
+    ('Sessões', (('Coletas e indicadores', 'sessions'),)),
+    ('Clusters', (('Coletas e indicadores', 'clusters'),)),
+    ('Geocercas', (('Dashboard', 'geofences'), ('Geocercas no mapa', 'geofences_map'))),
+    ('Configurações', (('Conexão', 'connection'),)),
+)
 COLORS = {'blue': '#0284c7', 'green': '#16a34a', 'yellow': '#ca8a04',
           'orange': '#ea580c', 'red': '#dc2626', 'purple': '#7e22ce'}
 
@@ -33,22 +43,37 @@ class J3MDialog(QDialog):
         self.api = ApiClient(self)
         self._busy = False
         self._loaded = False
-        self._scope = 'sessions'
+        self._scope = 'devices'
         self._cache = {}
         self.setWindowTitle('J3M Connect')
         self.resize(900, 650)
         layout = QVBoxLayout(self)
         body = QHBoxLayout()
         layout.addLayout(body)
-        self.menu = QListWidget()
-        self.menu.addItems(list(TITLES) + ['Conexão'])
-        self.menu.setMaximumWidth(210)
+        self.menu = QTreeWidget()
+        self.menu.setHeaderHidden(True)
+        self.menu.setIndentation(16)
+        self.menu.setMinimumWidth(220)
+        self.menu.setMaximumWidth(270)
+        self.menu.setAccessibleName('Navegação J3M')
+        self.menuItems = {}
+        for title, entries in MENU:
+            group = QTreeWidgetItem(self.menu, [title])
+            group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
+            font = group.font(0)
+            font.setBold(True)
+            group.setFont(0, font)
+            for caption, route in entries:
+                item = QTreeWidgetItem(group, [caption])
+                item.setData(0, Qt.ItemDataRole.UserRole, route)
+                self.menuItems[route] = item
+            group.setExpanded(False)
         body.addWidget(self.menu)
         self.pages = QStackedWidget()
         body.addWidget(self.pages, 1)
         self.browser = QWidget()
         panel = QVBoxLayout(self.browser)
-        self.title = label(TITLES[0])
+        self.title = label(TITLES[self._scope])
         self.title.setStyleSheet('font-size: 20px; font-weight: bold;')
         panel.addWidget(self.title)
         self.search = QLineEdit()
@@ -109,12 +134,16 @@ class J3MDialog(QDialog):
         config.addWidget(self.removeButton)
         config.addStretch()
         self.pages.addWidget(self.configPage)
+        self.geofencesPage = GeofencesPage(iface, self)
+        self.pages.addWidget(self.geofencesPage)
         self.statusLabel = label('Configure a conexão para começar.')
         layout.addWidget(self.statusLabel)
         close = QPushButton('Fechar')
         close.clicked.connect(self.close)
         layout.addWidget(close)
-        self.menu.currentRowChanged.connect(self._navigate)
+        self.menu.currentItemChanged.connect(self._navigate)
+        self.menu.itemClicked.connect(self._toggle_group)
+        self.menu.setExpandsOnDoubleClick(False)
         self.search.textChanged.connect(self._filter)
         self.records.currentIndexChanged.connect(self._selected)
         self.refreshButton.clicked.connect(self._refresh)
@@ -130,10 +159,15 @@ class J3MDialog(QDialog):
         self.api.received.connect(self._received)
         for button in self.findChildren(QPushButton):
             button.setAutoDefault(False)
-        self.menu.setCurrentRow(0 if settings.preferences()[1] else 4)
+        self._select_menu('devices' if settings.preferences()[1] else 'connection')
+        self.menu.collapseAll()
 
     def showEvent(self, event):
         super().showEvent(event)
+        if self.pages.currentWidget() is self.geofencesPage:
+            self._loaded = True
+            self.geofencesPage.activate()
+            return
         if not self._loaded:
             self._loaded = True
             if settings.preferences()[1]:
@@ -144,16 +178,33 @@ class J3MDialog(QDialog):
                 except ValueError as error:
                     self._error(str(error))
 
-    def _navigate(self, index):
+    def _select_menu(self, route):
+        item = self.menuItems[route]
+        self.menu.setCurrentItem(item)
+
+    def _toggle_group(self, item, column):
+        if item.childCount():
+            item.setExpanded(not item.isExpanded())
+
+    def _navigate(self, item, previous=None):
+        route = item.data(0, Qt.ItemDataRole.UserRole) if item else None
+        if route is None:
+            return
         self.api.cancel()
+        self.geofencesPage.api.cancel()
         self.secretEdit.clear()
         self.showSecret.setChecked(False)
-        self.pages.setCurrentIndex(1 if index == 4 else 0)
-        if index == 4:
+        self.pages.setCurrentIndex(1 if route == 'connection' else 2 if route == 'geofences_map' else 0)
+        self.statusLabel.setVisible(route != 'geofences_map')
+        if route == 'connection':
             return
-        self._scope = SCOPES[index]
-        self.title.setText(TITLES[index])
-        self.periodBox.setVisible(index != 0)
+        if route == 'geofences_map':
+            if self._loaded:
+                self.geofencesPage.activate()
+            return
+        self._scope = route
+        self.title.setText(TITLES[route])
+        self.periodBox.setVisible(route != 'sessions')
         self.polygonButton.setVisible(self._scope == 'geofences')
         self.search.blockSignals(True)
         self.search.clear()
@@ -167,7 +218,8 @@ class J3MDialog(QDialog):
             settings.save(self.clientEdit.text(), self.secretEdit.text())
             self.secretEdit.clear()
             self._cache.clear()
-            self.menu.setCurrentRow(SCOPES.index(self._scope))
+            self.geofencesPage.reset()
+            self._select_menu(self._scope)
         except ValueError as error:
             self._error(str(error))
 
@@ -177,6 +229,7 @@ class J3MDialog(QDialog):
             self.clientEdit.clear()
             self.secretEdit.clear()
             self._cache.clear()
+            self.geofencesPage.reset()
             self._filter()
             self.statusLabel.setText('Conexão removida. Informe novas credenciais para continuar.')
         except ValueError as error:
@@ -311,7 +364,7 @@ class J3MDialog(QDialog):
             if not color.isValid():
                 color = QColor('#16a34a')
             layer.renderer().setSymbol(QgsFillSymbol.createSimple({
-                'color': '{},{},{},40'.format(color.red(), color.green(), color.blue()),
+                'color': '{},{},{},64'.format(color.red(), color.green(), color.blue()),
                 'outline_color': color.name(), 'outline_width': '0.5'}))
             layer.triggerRepaint()
         self.iface.setActiveLayer(layer)
@@ -326,10 +379,12 @@ class J3MDialog(QDialog):
 
     def done(self, result):
         self.api.cancel()
+        self.geofencesPage.api.cancel()
         self.secretEdit.clear()
         super().done(result)
 
     def closeEvent(self, event):
         self.api.cancel()
+        self.geofencesPage.api.cancel()
         self.secretEdit.clear()
         super().closeEvent(event)

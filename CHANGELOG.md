@@ -2,6 +2,12 @@
 
 ## 1.1.0
 
+- Menu em grupos expansíveis: Dispositivos, Sessões, Clusters, Geocercas e Configurações, com submenus por função.
+
+- Nova seção independente Geocercas no mapa, com busca, seleção múltipla e uma camada por geocerca.
+- Borda sólida, preenchimento com 25% de opacidade e tooltip com o nome da geocerca.
+- Seleções preservadas ao filtrar/atualizar o catálogo e erros individuais na adição.
+
 - Import de QAction compatível com Qt5/Qt6 e metadata permitindo QGIS 4.x.
 - Testes de campos migrados para QMetaType em QGIS recente, mantendo fallback para QGIS 3.28.
 - Cobertura do carregamento/descarregamento do plugin e da simbologia de pontos.
