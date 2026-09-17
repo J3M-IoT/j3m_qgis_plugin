@@ -10,7 +10,7 @@ from qgis.core import QgsApplication, QgsAuthMethodConfig, QgsSettings
 PREFIX = "J3MConnect/"
 
 
-def configured_api_url():
+def _configuration():
     """Read the global configuration shipped with the plugin."""
     try:
         config = json.loads(
@@ -19,10 +19,23 @@ def configured_api_url():
             .read_text(encoding="utf-8-sig")
         )
     except (OSError, UnicodeError, ValueError):
-        return ""
+        return {}
+
+    return config if isinstance(config, dict) else {}
+
+
+def configured_api_url():
+    config = _configuration()
 
     value = config.get("api_url", "") if isinstance(config, dict) else ""
     return value.strip() if isinstance(value, str) else ""
+
+
+def configured_timeout_seconds():
+    value = _configuration().get("timeout_seconds", 30)
+    if type(value) is not int or (value != -1 and not 1 <= value <= 2147483):
+        raise ValueError("timeout_seconds deve ser um inteiro positivo (até 2147483) ou -1 para desabilitar.")
+    return value
 
 
 def validate_url(value):

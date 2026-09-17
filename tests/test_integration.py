@@ -65,7 +65,7 @@ class IntegrationTests(unittest.TestCase):
 
     def test_api_paths_and_period(self):
         manager = Mock()
-        with patch('j3m_connect.api.credentials', return_value=('https://example.test/v1', 'client', 'secret')), \
+        with patch('j3m_connect.api.credentials', return_value=('https://example.test', 'client', 'secret')), \
                 patch('j3m_connect.api.QgsNetworkAccessManager.instance', return_value=manager):
             api = ApiClient()
             for scope in ('sessions', 'devices', 'clusters', 'geofences'):
@@ -81,6 +81,57 @@ class IntegrationTests(unittest.TestCase):
                 self.assertEqual(query.queryItemValue('format'), 'geojson')
                 self.assertEqual(query.hasQueryItem('start_date'), scope != 'sessions')
             api.cancel()
+
+    def test_independent_endpoint_versions(self):
+        from j3m_connect.api import ENDPOINT_VERSIONS
+        manager = Mock()
+        with patch('j3m_connect.api.credentials', return_value=('https://example.test', 'client', 'secret')):
+            with patch('j3m_connect.api.QgsNetworkAccessManager.instance', return_value=manager):
+                with patch.dict(ENDPOINT_VERSIONS['devices'], {'collections': 'v2'}):
+                    api = ApiClient()
+                    for scope in ENDPOINT_VERSIONS:
+                        for kind in ('sessions', 'catalog', 'indicators', 'collections', 'table'):
+                            api.get(kind, 'uuid', scope=scope,
+                                    period=('2026-01-01 00:00:00', '2026-01-02 00:00:00'))
+                            version = 'v2' if (scope, kind) == ('devices', 'collections') else 'v1'
+                            expected = '/' + version + '/' + scope
+                            if kind not in ('sessions', 'catalog'):
+                                expected += '/uuid/' + kind
+                            self.assertEqual(manager.get.call_args.args[0].url().path(), expected)
+                    api.cancel()
+
+    def test_api_timeout_and_large_response(self):
+        manager = Mock()
+        with patch('j3m_connect.api.credentials', return_value=('https://example.test', 'client', 'secret')), \
+                patch('j3m_connect.api.QgsNetworkAccessManager.instance', return_value=manager), \
+                patch('j3m_connect.settings._configuration', return_value={'timeout_seconds': 7}):
+            api = ApiClient()
+            api.get('catalog')
+            self.assertEqual(api._timer.interval(), 7000)
+            self.assertTrue(api._timer.isActive())
+            network_timer = manager.get.return_value.findChild.return_value
+            network_timer.stop.assert_called()
+            network_timer.blockSignals.assert_called_with(True)
+            api._timeout()
+            self.assertIn('7 segundos', api._failure)
+            with patch('j3m_connect.settings._configuration', return_value={'timeout_seconds': -1}):
+                api.get('catalog')
+            self.assertFalse(api._timer.isActive())
+            reply = manager.get.return_value
+            reply.abort.reset_mock()
+            data = b' ' * (21 * 1024 * 1024)
+            reply.readAll.return_value = data
+            api._read()
+            self.assertEqual(len(api._buffer), len(data))
+            reply.abort.assert_not_called()
+            api.cancel()
+
+    def test_timeout_configuration(self):
+        from j3m_connect.settings import configured_timeout_seconds
+        for value in (0, -2, True, '30', 1.5, None, 2147484):
+            with self.subTest(value=value), patch('j3m_connect.settings._configuration', return_value={'timeout_seconds': value}):
+                with self.assertRaises(ValueError):
+                    configured_timeout_seconds()
 
     def test_contracts(self):
         record = {'uuid': 'a', 'name': 'Área', 'points': [

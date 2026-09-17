@@ -7,9 +7,16 @@ from qgis.PyQt.QtCore import QObject, QTimer, QUrl, QUrlQuery, pyqtSignal
 from qgis.PyQt.QtNetwork import QNetworkReply, QNetworkRequest
 from qgis.core import QgsNetworkAccessManager
 
-from .settings import credentials
+from .settings import credentials, configured_timeout_seconds
 
-MAX_BYTES = 20 * 1024 * 1024
+
+# Versions are independent for each resource and operation.
+ENDPOINT_VERSIONS = {
+    "sessions": {"catalog": "v1", "indicators": "v1", "collections": "v1", "table": "v1"},
+    "devices": {"catalog": "v1", "indicators": "v1", "collections": "v1", "table": "v1"},
+    "clusters": {"catalog": "v1", "indicators": "v1", "collections": "v1", "table": "v1"},
+    "geofences": {"catalog": "v1", "indicators": "v1", "collections": "v1", "table": "v1"},
+}
 
 
 class ApiClient(QObject):
@@ -31,12 +38,15 @@ class ApiClient(QObject):
     def get(self, kind, session=None, scope="sessions", period=None):
         self.cancel()
         try:
+            self._timeout_seconds = configured_timeout_seconds()
             base, client_id, secret = credentials()
             if scope not in ("sessions", "devices", "clusters", "geofences"):
                 raise ValueError("Recurso de API desconhecido.")
             if kind not in ("sessions", "catalog", "indicators", "collections", "table"):
                 raise ValueError("Operação de API desconhecida.")
-            path = "/" + scope
+            operation = "catalog" if kind == "sessions" else kind
+            version = ENDPOINT_VERSIONS[scope][operation]
+            path = "/" + version + "/" + scope
             if kind not in ("sessions", "catalog"):
                 if session is None or not str(session) or str(session) in (".", ".."):
                     raise ValueError("Selecione uma sessão válida.")
@@ -91,11 +101,19 @@ class ApiClient(QObject):
             self._buffer.clear()
 
             self._reply = QgsNetworkAccessManager.instance().get(request)
+            # QGIS adds an inactivity timer to each reply. Use our configured
+            # deadline instead, without changing the global QGIS timeout.
+            network_timer = self._reply.findChild(QTimer, "timeoutTimer")
+            if network_timer is not None:
+                network_timer.stop()
+                # QGIS may restart this timer on progress or authentication.
+                network_timer.blockSignals(True)
             self._reply.readyRead.connect(self._read)
             self._reply.finished.connect(self._finished)
 
             self.busyChanged.emit(True)
-            self._timer.start(30000)
+            if self._timeout_seconds != -1:
+                self._timer.start(self._timeout_seconds * 1000)
 
         except ValueError as error:
             self.failed.emit(str(error))
@@ -116,7 +134,7 @@ class ApiClient(QObject):
 
     def _timeout(self):
         if self._reply is not None:
-            self._failure = "A API excedeu o tempo limite de 30 segundos."
+            self._failure = "A API excedeu o tempo limite de {} segundos.".format(self._timeout_seconds)
             self._reply.abort()
 
     def _read(self):
@@ -124,13 +142,6 @@ class ApiClient(QObject):
             return
 
         self._buffer.extend(bytes(self._reply.readAll()))
-
-        if len(self._buffer) > MAX_BYTES:
-            self._failure = (
-                "A resposta excede o limite de 20 MiB desta versão."
-            )
-            self._buffer.clear()
-            self._reply.abort()
 
     def _finished(self):
         reply = self._reply

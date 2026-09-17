@@ -26,19 +26,22 @@ As configurações globais ficam em `j3m_connect/config.json`, incluído no ZIP 
 
 ```json
 {
-  "api_url": "https://j3m-public-api-47f36ac58e86.herokuapp.com/v1"
+  "api_url": "https://j3m-public-api-47f36ac58e86.herokuapp.com",
+  "timeout_seconds": 30
 }
 ```
 
-Para alterar o backend da distribuição, edite `api_url` nesse arquivo e gere novamente o pacote com `python scripts/package.py`. O arquivo é destinado ao versionamento e contém somente configurações públicas; não coloque credenciais nele. O empacotamento verifica se existe uma URL preenchida e aceita somente a chave `api_url` nesta versão.
+Para alterar o backend da distribuição, edite `api_url` nesse arquivo e gere novamente o pacote com `python scripts/package.py`. O arquivo é destinado ao versionamento e contém somente configurações públicas; não coloque credenciais nele. O empacotamento valida as chaves `api_url` e `timeout_seconds`.
+
+`timeout_seconds` define o tempo máximo da requisição em segundos inteiros positivos (até 2147483, limite do temporizador Qt). Use `-1` para desabilitar o timeout do plugin. O padrão é 30 segundos. Não há limite de tamanho de resposta imposto pelo plugin.
 
 Após instalar, o usuário informa somente **Client ID** e **Client Secret**. A URL não aparece na janela e é lida exclusivamente do `config.json` distribuído no pacote. Não é necessário criar arquivos locais. Não há leitura de `.env` nem de variáveis de ambiente para configurar o backend, nem URL fixa no código Python.
 
 URLs salvas por versões anteriores são ignoradas. Para trocar o backend, o mantenedor altera `config.json` e distribui o pacote atualizado. Reinicie o QGIS após atualizar os arquivos. Se a configuração de conexão estiver ausente ou inválida, o plugin orienta o usuário a contatar o responsável pelo plugin.
 
-A URL é a base da API, podendo incluir um prefixo de caminho; não inclua `/sessions`, parâmetros, fragmentos ou credenciais na URL. HTTPS é obrigatório, exceto HTTP em `localhost`, `127.0.0.1` ou `::1`, para desenvolvimento local.
+A URL é a base da API; não inclua a versão (`/v1`, `/v2`), `/sessions`, parâmetros, fragmentos ou credenciais na URL. HTTPS é obrigatório, exceto HTTP em `localhost`, `127.0.0.1` ou `::1`, para desenvolvimento local.
 
-Os exemplos fornecidos usam o prefixo `/v1`, incluído na configuração distribuída. Para execução local conforme o documento, use `http://localhost:8014/v1`. Configure esse endereço somente em `config.json`. O prefixo de produção segue o exemplo documentado e ainda precisa ser confirmado com a API publicada.
+Para execução local, use `http://localhost:8014` em `config.json`. A versão de cada endpoint fica em `ENDPOINT_VERSIONS`, no arquivo `j3m_connect/api.py`, inicialmente `v1`. Por exemplo, alterar somente `ENDPOINT_VERSIONS["devices"]["collections"]` para `"v2"` faz essa chamada usar `/v2/devices/{uuid}/collections`, mantendo os demais endpoints em `v1`. A operação `sessions` é um alias de `catalog` e usa a mesma versão.
 
 Clique em **Salvar e conectar**. O QGIS poderá solicitar a criação/desbloqueio da senha mestra. Client ID e Client Secret ficam no banco de autenticação criptografado do QGIS, em uma configuração Basic usada apenas como armazenamento. As chamadas usam os cabeçalhos `X-Client-Id` e `X-Client-Secret`, não HTTP Basic. Somente o identificador da configuração de autenticação fica em QgsSettings. Deixe o campo de segredo vazio para manter o segredo já salvo; ele nunca é repopulado na interface. **Remover conexão salva** apaga essa entrada do cofre e as preferências do plugin.
 
@@ -78,7 +81,7 @@ O 404 com a mensagem documentada `There is no data for the provided parameters.`
 - `j3m_connect.py`: lifecycle, menu e barra de ferramentas.
 - `dialog.py`: construção da interface Qt e fluxo de navegação. `dialog.ui` é legado e não é carregado nem empacotado.
 - `settings.py`: URL e cofre de autenticação QGIS.
-- `api.py`: HTTP assíncrono via QgsNetworkAccessManager, timeout de 30 segundos e limite de resposta de 20 MiB.
+- `api.py`: HTTP assíncrono via QgsNetworkAccessManager, timeout configurável em segundos e sem limite de tamanho de resposta.
 - `adapters.py`: adaptação simples das respostas em desenvolvimento.
 - `layers.py`: validação e carregamento de GeoJSON via OGR.
 - `scripts/package.py`: empacotamento local, sem dependências.

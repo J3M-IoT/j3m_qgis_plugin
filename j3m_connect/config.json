@@ -1,3 +1,4 @@
 {
-  "api_url": "https://j3m-public-api-47f36ac58e86.herokuapp.com/v1"
+  "api_url": "https://j3m-public-api-47f36ac58e86.herokuapp.com",
+  "timeout_seconds": 30
 }
