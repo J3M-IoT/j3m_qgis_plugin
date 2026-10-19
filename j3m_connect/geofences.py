@@ -6,9 +6,9 @@ from qgis.PyQt.QtWidgets import (
     QPushButton, QVBoxLayout, QWidget,
 )
 
-from .adapters import catalog_records
+from .adapters import catalog_records, geofence_geojson
 from .api import ApiClient
-from .layers import add_geofence_layer
+from .layers import LayerLoader
 
 
 class GeofencesPage(QWidget):
@@ -16,6 +16,8 @@ class GeofencesPage(QWidget):
         super().__init__(parent)
         self.iface = iface
         self.api = ApiClient(self)
+        self.layerLoader = LayerLoader(self)
+        self._queue = []
         self.loaded = False
         self.busy = False
         layout = QVBoxLayout(self)
@@ -53,6 +55,7 @@ class GeofencesPage(QWidget):
         self.api.received.connect(self._received)
         self.api.failed.connect(self.status.setText)
         self.api.busyChanged.connect(self._set_busy)
+        self.layerLoader.failed.connect(self._load_failed)
         self._selection_changed()
 
     def activate(self):
@@ -60,12 +63,18 @@ class GeofencesPage(QWidget):
             self.refresh()
 
     def reset(self):
-        self.api.cancel()
+        self.cancel()
         self.loaded = False
         self.records.clear()
         self.search.clear()
         self._selection_changed()
         self.status.setText('Atualize a lista para consultar as geocercas.')
+
+    def cancel(self):
+        self._queue = []
+        self.api.cancel()
+        self.layerLoader.cancel()
+        self._set_busy(False)
 
     def refresh(self):
         self.status.setText('Carregando geocercas…')
@@ -127,24 +136,36 @@ class GeofencesPage(QWidget):
 
     def _add(self):
         selected = [item for item in self._items() if item.checkState() == Qt.CheckState.Checked]
+        self._queue = [dict(item.data(Qt.ItemDataRole.UserRole)) for item in selected]
+        self._added = 0
+        self._errors = []
         self._set_busy(True)
-        added, errors = [], []
-        try:
-            for item in selected:
-                record = item.data(Qt.ItemDataRole.UserRole)
-                try:
-                    layer = add_geofence_layer(record)
-                except (ValueError, OSError, RecursionError) as error:
-                    errors.append('{}: {}'.format(record['name'], error))
-                    continue
-                added.append(layer)
-                item.setCheckState(Qt.CheckState.Unchecked)
-            if added:
-                self.iface.setActiveLayer(added[-1])
-                self.iface.actionMapTips().setChecked(True)
-            message = '{} geocerca(s) adicionada(s) como camadas separadas.'.format(len(added))
-            if errors:
-                message += '\nNão foi possível adicionar:\n' + '\n'.join(errors)
-            self.status.setText(message)
-        finally:
+        self._next_layer()
+
+    def _load_failed(self, message):
+        self._errors.append(message)
+        self._next_layer()
+
+    def _next_layer(self):
+        if not self._queue:
             self._set_busy(False)
+            self.status.setText('{} geocerca(s) adicionada(s).'.format(self._added)+
+                ('\nNão foi possível adicionar:\n'+'\n'.join(self._errors) if self._errors else ''))
+            return
+        record = self._queue.pop(0)
+        try:
+            payload = geofence_geojson(record)
+        except (ValueError, TypeError, RecursionError) as error:
+            self._load_failed(record['name']+': '+str(error))
+            return
+        def finish(layer, digest):
+            if layer is not None:
+                self._added += 1
+                for item in self._items():
+                    if item.data(Qt.ItemDataRole.UserRole)['uuid'] == record['uuid']:
+                        item.setCheckState(Qt.CheckState.Unchecked)
+                self.iface.setActiveLayer(layer)
+                self.iface.actionMapTips().setChecked(True)
+            self._next_layer()
+        self.status.setText('Preparando '+record['name']+'…')
+        self.layerLoader.load(payload,'J3M — '+record['name'],finish,geofence=True)

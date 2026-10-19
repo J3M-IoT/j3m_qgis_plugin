@@ -1,6 +1,7 @@
 """Integration UI and contract checks using QGIS, without real credentials."""
 import sys
 import unittest
+import tempfile
 from pathlib import Path
 from unittest.mock import patch, Mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -41,6 +42,9 @@ class IntegrationTests(unittest.TestCase):
         window = QMainWindow()
         iface = Mock()
         iface.mainWindow.return_value = window
+        iface.addDockWidget.side_effect = window.addDockWidget
+        iface.removeDockWidget.side_effect = window.removeDockWidget
+        window.show()
         plugin = J3MConnect(iface)
         plugin.initGui()
         action = plugin.action
@@ -146,14 +150,14 @@ class IntegrationTests(unittest.TestCase):
             self.assertEqual(rows[0][:3], ('T', 0, 'C'))
         with self.assertRaises(ValueError):
             geofence_geojson(dict(record, points=[{'lng': 200, 'lat': 0}]))
-        with patch('j3m_connect.layers.QgsApplication.qgisSettingsDirPath',
-                   return_value=str(Path(__file__).resolve().parents[1] / 'dist' / 'test-profile')):
+        with tempfile.TemporaryDirectory() as directory, patch('j3m_connect.layers.QgsApplication.qgisSettingsDirPath',
+                   return_value=directory):
             layer = add_geojson_layer(polygon, 'test geofence')
-        self.assertTrue(layer.isValid())
-        self.assertEqual(layer.crs().authid(), 'EPSG:4326')
-        path = layer.source().split('|')[0]
-        QgsProject.instance().removeMapLayer(layer.id())
-        Path(path).unlink()
+            self.assertTrue(layer.isValid())
+            self.assertEqual(layer.crs().authid(), 'EPSG:4326')
+            path = layer.source().split('|')[0]
+            QgsProject.instance().removeMapLayer(layer.id())
+            Path(path).unlink()
 
     def test_navigation_period_and_tables(self):
         window = QMainWindow()

@@ -69,6 +69,8 @@ class GeofenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, patch('j3m_connect.layers.QgsApplication.qgisSettingsDirPath', return_value=directory):
             try:
                 page._add()
+                from qt_helpers import wait_for
+                wait_for(lambda: not page.busy)
                 layers = [layer for key, layer in QgsProject.instance().mapLayers().items() if key not in before]
                 self.assertEqual(len(layers), 2)
                 self.assertEqual(len({layer.source() for layer in layers}), 2)

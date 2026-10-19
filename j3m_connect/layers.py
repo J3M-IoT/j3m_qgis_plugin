@@ -2,68 +2,180 @@
 """Load direct GeoJSON responses as durable, local OGR vector layers."""
 
 import json
+import hashlib
 from pathlib import Path
 from uuid import uuid4
 from qgis.PyQt.QtGui import QColor
+from qgis.PyQt.QtCore import QObject, pyqtSignal
+from qgis.PyQt import sip
 
 from qgis.core import (
     Qgis, QgsApplication, QgsFillSymbol, QgsMarkerSymbol, QgsProject, QgsProperty,
-    QgsSingleSymbolRenderer, QgsSymbolLayer, QgsVectorLayer, QgsWkbTypes,
+    QgsSingleSymbolRenderer, QgsSymbolLayer, QgsVectorLayer, QgsWkbTypes, QgsTask,
 )
 
 from .map_tips import configure_map_tip, _text
 from .adapters import geofence_geojson
 
 
-def add_geojson_layer(payload, name, *, geofence=False):
-    """Return the added layer, or None for an empty FeatureCollection."""
+class LayerLoader(QObject):
+    """Prepare private layers in a worker, transfer ownership, then publish in Qt."""
+    busyChanged = pyqtSignal(bool)
+    failed = pyqtSignal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._task = None
+        self._generation = 0
+
+    def cancel(self):
+        self._generation += 1
+        if self._task is not None:
+            self._task.cancel()
+            self._task = None
+        self.busyChanged.emit(False)
+
+    def load(self, payload, name, callback, *, geofence=False):
+        self.cancel()
+        generation = self._generation
+        directory = Path(QgsApplication.qgisSettingsDirPath()) / 'j3m_connect' / 'layers'
+        main_thread = QgsApplication.instance().thread()
+        def finished(error, result=None):
+            if sip.isdeleted(self) or generation != self._generation:
+                discard_prepared(result)
+                return
+            self._task = None
+            self.busyChanged.emit(False)
+            if task.isCanceled():
+                discard_prepared(result)
+                self.failed.emit('Preparação da camada cancelada.')
+                return
+            if error:
+                # Validation errors are local messages, never remote JSON bodies.
+                self.failed.emit(str(error) if isinstance(error, ValueError) else 'Não foi possível preparar a camada local.')
+                return
+            if result is None:
+                callback(None, None)
+                return
+            layer, path, digest = result
+            try:
+                if geofence:
+                    features = payload.get('features') if payload.get('type') == 'FeatureCollection' else [payload]
+                    _style_geofence(layer, features[0]['properties'])
+                else:
+                    _style_points(layer)
+                    configure_map_tip(layer)
+                QgsProject.instance().addMapLayer(layer)
+                callback(layer, digest)
+            except (ValueError, TypeError, OSError, RuntimeError, KeyError):
+                if not sip.isdeleted(layer):
+                    if QgsProject.instance().mapLayer(layer.id()) is not None:
+                        QgsProject.instance().removeMapLayer(layer.id())
+                    else:
+                        sip.delete(layer)
+                path.unlink(missing_ok=True)
+                self.failed.emit('Não foi possível concluir a camada local.')
+        task = QgsTask.fromFunction(
+            'J3M: preparar camada', _prepare_layer, payload=payload, name=name,
+            directory=directory, target_thread=main_thread, on_finished=finished)
+        self._task = task
+        self.busyChanged.emit(True)
+        QgsApplication.taskManager().addTask(self._task)
+
+
+def discard_prepared(result):
+    if result is not None:
+        layer, path, _ = result
+        sip.delete(layer)
+        path.unlink(missing_ok=True)
+
+
+def _prepare_layer(task, payload, name, directory, target_thread=None):
+    """No live project, UI, settings, or existing layer is accessed here."""
+    if task.isCanceled():
+        return None
     if not isinstance(payload, dict):
-        raise ValueError("GeoJSON deve ser um objeto Feature ou FeatureCollection.")
-    kind = payload.get("type")
-    if kind == "FeatureCollection":
-        features = payload.get("features")
+        raise ValueError('GeoJSON deve ser um objeto Feature ou FeatureCollection.')
+    kind = payload.get('type')
+    if kind == 'FeatureCollection':
+        features = payload.get('features')
         if not isinstance(features, list):
-            raise ValueError("FeatureCollection sem lista de feições válida.")
-    elif kind == "Feature":
+            raise ValueError('FeatureCollection sem lista de feições válida.')
+    elif kind == 'Feature':
         features = [payload]
     else:
-        raise ValueError("GeoJSON deve ser Feature ou FeatureCollection.")
+        raise ValueError('GeoJSON deve ser Feature ou FeatureCollection.')
+    categories = {}
     for feature in features:
-        if (not isinstance(feature, dict) or feature.get("type") != "Feature"
-                or "geometry" not in feature or "properties" not in feature
-                or not isinstance(feature["properties"], (dict, type(None)))):
-            raise ValueError("GeoJSON contém uma feição inválida.")
-        geometry = feature["geometry"]
+        if task.isCanceled():
+            return None
+        if (not isinstance(feature, dict) or feature.get('type') != 'Feature'
+                or 'geometry' not in feature or 'properties' not in feature
+                or not isinstance(feature['properties'], (dict, type(None)))):
+            raise ValueError('GeoJSON contém uma feição inválida.')
+        geometry = feature['geometry']
         if geometry is not None:
             _validate_geometry(geometry)
+        props = feature.get('properties') or {}
+        condition = props.get('condition') or {}
+        caption = str(condition.get('name') or 'Sem condição') if isinstance(condition, dict) else 'Sem condição'
+        color = str(props.get('markerColor') or '#808080')
+        categories[caption+' | '+color] = (caption,color)
     if not features:
         return None
-    try:
-        serialized = json.dumps(payload, ensure_ascii=False, allow_nan=False)
-    except (TypeError, ValueError) as error:
-        raise ValueError("GeoJSON contém valores inválidos.") from error
-    directory = Path(QgsApplication.qgisSettingsDirPath()) / "j3m_connect" / "layers"
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / (uuid4().hex + ".geojson")
+    path = directory / (uuid4().hex + '.geojson')
+    layer = None
     try:
-        path.write_text(serialized, encoding="utf-8")
-        # OGR discovers the union of attributes across all features. Flatten
-        # objects for numeric metric columns without imposing a metric schema.
-        uri = str(path) + "|option:FLATTEN_NESTED_ATTRIBUTES=YES"
-        layer = QgsVectorLayer(uri, name, "ogr")
+        digest = hashlib.sha256()
+        encoder = json.JSONEncoder(ensure_ascii=False, sort_keys=True, allow_nan=False)
+        with path.open('wb') as stream:
+            for chunk in encoder.iterencode(payload):
+                if task.isCanceled():
+                    break
+                data = chunk.encode('utf-8')
+                stream.write(data)
+                digest.update(data)
+        if task.isCanceled():
+            path.unlink(missing_ok=True)
+            return None
+        layer = QgsVectorLayer(str(path)+'|option:FLATTEN_NESTED_ATTRIBUTES=YES', name, 'ogr')
         if not layer.isValid() or layer.featureCount() != len(features):
-            del layer
-            raise ValueError("OGR não conseguiu carregar todas as feições GeoJSON.")
-        if geofence:
-            _style_geofence(layer, features[0]['properties'])
-        else:
-            _style_points(layer)
-            configure_map_tip(layer)
-        QgsProject.instance().addMapLayer(layer)
-        return layer
+            raise ValueError('OGR não conseguiu carregar todas as feições GeoJSON.')
+        layer.setCustomProperty('j3m/categories', json.dumps(categories, ensure_ascii=False))
+        if task.isCanceled():
+            sip.delete(layer)
+            path.unlink(missing_ok=True)
+            return None
+        if target_thread is not None:
+            layer.moveToThread(target_thread)
+        return layer, path, digest.hexdigest()
     except Exception:
-        path.unlink(missing_ok=True)
+        if layer is not None and not sip.isdeleted(layer):
+            sip.delete(layer)
+        if path.exists():
+            path.unlink()
         raise
+
+
+def add_geojson_layer(payload, name, *, geofence=False):
+    """Synchronous helper for scripts/tests; UI workflows use LayerLoader."""
+    class Immediate:
+        def isCanceled(self):
+            return False
+    directory = Path(QgsApplication.qgisSettingsDirPath()) / 'j3m_connect' / 'layers'
+    result = _prepare_layer(Immediate(),payload,name,directory)
+    if result is None:
+        return None
+    layer, _, _ = result
+    if geofence:
+        features = payload.get('features') if payload.get('type') == 'FeatureCollection' else [payload]
+        _style_geofence(layer,features[0]['properties'])
+    else:
+        _style_points(layer)
+        configure_map_tip(layer)
+    QgsProject.instance().addMapLayer(layer)
+    return layer
 
 
 def add_geofence_layer(record):

@@ -23,7 +23,8 @@ def main():
     output.parent.mkdir(exist_ok=True)
     files = ["__init__.py", "metadata.txt", "j3m_connect.py", "api.py",
              "adapters.py", "settings.py", "layers.py", "dialog.py", "LICENSE", "j3m-logo.jpeg",
-             "config.json", "map_tips.py", "geofences.py"]
+             "config.json", "map_tips.py", "geofences.py", "analysis.py", "charts.py",
+             "cartography.py", "workbench.py", "shared_maps.py"]
     with ZipFile(output, "w", ZIP_DEFLATED) as archive:
         for name in files:
             archive.write(plugin / name, "j3m_connect/" + name)

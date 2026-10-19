@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.0
+
+- Painel acoplável/flutuante, menu recolhível, cartões de métricas e paleta nativa Qt.
+- Datas padrão: hoje, 00:00:00 a 23:59:59, no fuso do dispositivo/cluster ou UTC em geocercas; atalhos e equivalente UTC. Sessões e compartilhamentos mantêm o período da API.
+- Catálogo enriquecido, consultas salvas no projeto, carga sequencial, progresso e cancelamento visível.
+- Mapas por métrica com escala fixa, classes para ausentes/fora da escala, tamanho de ponto, aliases e controle temporal.
+- Série Qt, seleção ligada ao mapa, qualidade, distribuições, comparação descritiva e inspeção persistente.
+- Atualização de snapshots preservando camada/estilo; adoção de camadas antigas e ação no menu de contexto do QGIS.
+- Extremos, distribuições e mudanças/detalhes de sessão por rotas públicas existentes, sem encaminhar o Secret da integração.
+- Mapas compartilhados por código, coletas por UUID e fundo XYZ HTTPS quando informado pela API.
+- Exportações GeoPackage/CSV/GeoJSON/KML, QML, procedência, PDF e estudo portátil QGZ + GeoPackage + original quando disponível.
+- Análises maiores e exportações vetoriais em tarefas canceláveis do QGIS; renderização assíncrona do mapa do PDF.
+- Faixa QGIS 3.28–4.99 preservada e flag supportsQt6 obsoleta removida. 44 testes em QGIS 3.44.13/3.44.15 com Qt5 e QGIS 4.2.2 com Qt 6.10.2. API real não exercitada.
+- Preparação JSON/OGR, hash e cópia de originais em segundo plano; descarte de resultados cancelados e testes de falhas HTTP/descarregamento durante tarefas. Gráficos com preparação prévia e desenho limitado.
+- Metadado de licença alinhado à GPL v3 já presente no LICENSE; enums revisados pelo verificador Qt 6.
+- Nenhuma alteração nas APIs ou frontend. Sem novos algoritmos científicos ou regras de classificação J3M.
+
 ## 1.1.0
 
 - Menu em grupos expansíveis: Dispositivos, Sessões, Clusters, Geocercas e Configurações, com submenus por função.

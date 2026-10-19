@@ -1,128 +1,95 @@
-# J3M Connect
+# J3M Connect — 1.2.0
 
-Plugin Python/PyQGIS para consultar a API de integrações do J3M e carregar coletas no mapa. Versão **1.1.0**, experimental, em desenvolvimento. O backend mantém autenticação, autorização e regras de negócio; o plugin cuida da configuração, comunicação, apresentação e camadas.
+Plugin Python/PyQGIS para consultar os dados existentes na public_api J3M, carregar coletas/geocercas e produzir mapas, séries e estudos no QGIS. A versão permanece **experimental**. Nenhuma API ou arquivo do frontend foi alterado.
 
-## Requisitos
+## Instalação e compatibilidade
 
-- QGIS 3.28 a 4.99, com Python e provedor OGR (incluídos no QGIS).
-- Nenhuma dependência Python externa. Imports adaptados para Qt5/Qt6; a execução local foi validada no QGIS 3.44 com Qt5. QGIS 4/Qt6 ainda requer validação nesse ambiente.
-- Para acesso remoto, URL da API e credenciais fornecidas pelo J3M.
+- Pacote: `dist/j3m_connect-1.2.0.zip`. Instale em **Complementos → Gerenciar e instalar complementos → Instalar a partir do ZIP** e reinicie o QGIS.
+- Faixa declarada preservada: **QGIS 3.28 a 4.99**. A compatibilidade é indicada por essa faixa; a flag obsoleta `supportsQt6` foi removida.
+- Interface por `qgis.PyQt`, enums com escopo e QAction adaptado a Qt5/Qt6. Sem dependências de pip, QtCharts, WebEngine, pandas ou matplotlib.
+- Usa OGR, autenticação, controle temporal e exportadores fornecidos pelo QGIS.
+- Execução verificada em **QGIS 3.44.13 e 3.44.15 / Qt 5.15.13 / Windows** e **QGIS 4.2.2 / Qt 6.10.2 / Linux em Docker**, com 44 testes. QGIS 3.28 não foi executado; a faixa declarada não equivale a teste de cada versão intermediária.
+- Gere o ZIP com `python scripts/package.py` (Python 3; o empacotamento não importa QGIS).
 
-## Instalação local
+## Conexão
 
-O pacote pronto está em `dist/j3m_connect-1.1.0.zip`. No QGIS, abra **Complementos → Gerenciar e instalar complementos → Instalar a partir do ZIP**, selecione o pacote e habilite **J3M Connect**. O plugin aparece no menu Complementos e na barra de ferramentas.
+Em **Configurações → Conexão**, informe Client ID e Client Secret e escolha **Salvar e conectar**. O cofre criptografado do QGIS guarda as credenciais; pode ser necessário desbloquear a senha mestra. O Secret nunca é repopulado. Vazio mantém o salvo, desde que o Client ID não mude.
 
-Para gerar novamente o ZIP, execute na raiz com Python 3:
+QgsSettings guarda o identificador do cofre e preferências da interface. A integração usa os cabeçalhos X-Client-Id e X-Client-Secret, não HTTP Basic. Remover conexão apaga a entrada no cofre, sem apagar camadas baixadas.
 
-```powershell
-python scripts/package.py
-```
+A distribuição lê somente `j3m_connect/config.json`, com `api_url` e `timeout_seconds`. Não usa .env. Não inclua versão, rota, query, fragmento ou credenciais na URL base. HTTPS é obrigatório, exceto localhost/loopback para desenvolvimento. Timeout: inteiro positivo até 2147483, ou -1 para desabilitar. Redirecionamentos são recusados; configure a URL final. Não há teto de bytes da resposta imposto pelo plugin.
 
-Alternativamente, em **Configurações → Perfis de usuário → Abrir pasta do perfil ativo**, copie a pasta `j3m_connect` para `python/plugins` (crie essas subpastas se necessário), reinicie o QGIS e habilite o complemento. No Windows, o perfil padrão normalmente fica em `%APPDATA%/QGIS/QGIS3/profiles/default`.
+## Consultar e carregar
 
-## Configuração
+O painel pode ser acoplado ou flutuar; **Menu** recolhe a navegação. Usa a paleta Qt, incluindo tema claro/escuro, e lembra a posição flutuante.
 
-As configurações globais ficam em `j3m_connect/config.json`, incluído no ZIP publicado:
+1. Selecione Dispositivos, Sessões, Clusters ou Geocercas e busque por nome/UUID.
+2. O período padrão selecionável é **hoje, 00:00:00 a 23:59:59**. Dispositivos/clusters usam seu fuso cadastrado; geocercas usam UTC conforme a API. Selecionar outro recurso reaplica o padrão. Atalhos: Hoje, Ontem, 7 dias e 24 horas.
+3. O equivalente UTC fica explícito. Sessões usam o intervalo definido no J3M, sem filtro adicional de período.
+4. Consulte total/condição, cartões das primeiras quatro métricas e tabela completa. Geocercas também consultam mínimos/máximos.
+5. **Adicionar coletas ao mapa** cria um snapshot. **Adicionar vários registros** processa uma fila sequencial; falha interrompe o lote e preserva camadas concluídas. O intervalo digitado usa o fuso de cada recurso, conforme informado no seletor do lote.
+6. **Salvar consulta** registra recurso, intervalo e fuso no projeto, sem segredos. Salve o projeto QGIS para persistir. Consultas salvas resolvem o recurso pelo catálogo autorizado atual.
 
-```json
-{
-  "api_url": "https://j3m-public-api-47f36ac58e86.herokuapp.com",
-  "timeout_seconds": 30
-}
-```
+O catálogo mostra, quando disponíveis, bateria, última coleta, status, modo, validador, observações e indicação de sessão ao vivo. Status cadastral não comprova conexão em tempo real; a atualização é manual.
 
-Para alterar o backend da distribuição, edite `api_url` nesse arquivo e gere novamente o pacote com `python scripts/package.py`. O arquivo é destinado ao versionamento e contém somente configurações públicas; não coloque credenciais nele. O empacotamento valida as chaves `api_url` e `timeout_seconds`.
+O HTTP é assíncrono, com progresso e cancelamento. A interpretação do JSON, validação, gravação e preparação OGR ocorrem em tarefas de segundo plano; a camada pronta é transferida para a thread principal antes de entrar no projeto. Fechar o painel ou mudar de seção cancela as consultas e preparações pendentes, descartando resultados atrasados. As rotas atuais não oferecem cursor/paginação.
 
-`timeout_seconds` define o tempo máximo da requisição em segundos inteiros positivos (até 2147483, limite do temporizador Qt). Use `-1` para desabilitar o timeout do plugin. O padrão é 30 segundos. Não há limite de tamanho de resposta imposto pelo plugin.
+## Geocercas
 
-Após instalar, o usuário informa somente **Client ID** e **Client Secret**. A URL não aparece na janela e é lida exclusivamente do `config.json` distribuído no pacote. Não é necessário criar arquivos locais. Não há leitura de `.env` nem de variáveis de ambiente para configurar o backend, nem URL fixa no código Python.
+**Geocercas no mapa** continua independente do dashboard: busca, marcação múltipla e uma camada/arquivo por geocerca. Marcar todas as visíveis respeita a busca; desmarcar todas também limpa ocultas. Erros são individuais e itens que falharam permanecem marcados.
 
-URLs salvas por versões anteriores são ignoradas. Para trocar o backend, o mantenedor altera `config.json` e distribui o pacote atualizado. Reinicie o QGIS após atualizar os arquivos. Se a configuração de conexão estiver ausente ou inválida, o plugin orienta o usuário a contatar o responsável pelo plugin.
+Borda sólida, preenchimento com 25% de opacidade, cor cadastrada e tooltip com nome são preservados. O dashboard de coletas usa a associação geofence._id registrada no J3M, sem executar um novo recorte ponto-no-polígono.
 
-A URL é a base da API; não inclua a versão (`/v1`, `/v2`), `/sessions`, parâmetros, fragmentos ou credenciais na URL. HTTPS é obrigatório, exceto HTTP em `localhost`, `127.0.0.1` ou `::1`, para desenvolvimento local.
+## Análise → Camadas e estudos
 
-Para execução local, use `http://localhost:8014` em `config.json`. A versão de cada endpoint fica em `ENDPOINT_VERSIONS`, no arquivo `j3m_connect/api.py`, inicialmente `v1`. Por exemplo, alterar somente `ENDPOINT_VERSIONS["devices"]["collections"]` para `"v2"` faz essa chamada usar `/v2/devices/{uuid}/collections`, mantendo os demais endpoints em `v1`. A operação `sessions` é um alias de `catalog` e usa a mesma versão.
+Selecione uma camada J3M no projeto. Os snapshots continuam disponíveis offline. **Analisar camada ativa**, também no menu de contexto das camadas vetoriais, admite camadas antigas com collectedAt e campos collects_; sua procedência anterior fica identificada como desconhecida.
 
-Clique em **Salvar e conectar**. O QGIS poderá solicitar a criação/desbloqueio da senha mestra. Client ID e Client Secret ficam no banco de autenticação criptografado do QGIS, em uma configuração Basic usada apenas como armazenamento. As chamadas usam os cabeçalhos `X-Client-Id` e `X-Client-Secret`, não HTTP Basic. Somente o identificador da configuração de autenticação fica em QgsSettings. Deixe o campo de segredo vazio para manter o segredo já salvo; ele nunca é repopulado na interface. **Remover conexão salva** apaga essa entrada do cofre e as preferências do plugin.
+- **Mapa:** condição original ou rampa por métrica, escala fixa, tamanho de ponto e legenda para valores ausentes/fora da escala. Aliases/unidades, grupo J3M e controle temporal por collectedAt são configurados ao carregar.
+- **Série:** gráfico Qt por dispositivo em UTC, com seleção ligada ao mapa. Valores ausentes interrompem as linhas, assim como intervalos superiores a 3× o intervalo mediano. Séries grandes têm desenho reduzido identificado (até 4.000 pontos no gráfico), preparado antes da pintura. A tabela limita a exibição a 2.000 observações; resumos e exportação usam todas.
+- **Qualidade:** n válido, mínimo, média, mediana, máximo, desvio padrão populacional e contagens de datas/geometrias inválidas e IDs repetidos/ausentes. Zero é preservado. Unidades conflitantes suspendem resumos numéricos e gráfico.
+- **Distribuição:** barras e contagens por condição, dia/noite, modo e dispositivo. São percentuais de registros, não duração de exposição.
+- **Comparar:** n e médias de duas camadas, com diferença B − A quando a unidade é confirmada. Comparação descritiva, sem pareamento espacial/temporal ou inferência causal.
+- **Inspecionar:** atributos completos de até 20 pontos selecionados, com cópia. O tooltip existente continua disponível.
+- **Exportar:** GeoPackage, CSV com coordenadas, GeoJSON, KML, QML e procedência JSON; PDF da camada com mapa/legenda textual/estatísticas; estudo portátil QGZ + GeoPackage + estilo + procedência. Quando disponível, o pacote inclui o GeoJSON original. Não empacota automaticamente todas as bases externas do projeto.
 
-## Utilização
+**Atualizar snapshot** repete a consulta original usando o catálogo de integração atual, mantém a identidade da camada e seu estilo e troca sua fonte por um novo arquivo. Não é sincronização incremental. Camadas em edição são recusadas; resposta vazia preserva a camada anterior. Arquivos antigos não são apagados, pois outros projetos podem referenciá-los.
 
-1. Em **Configurações → Conexão**, informe Client ID e Client Secret e clique em **Salvar e conectar**. É possível mostrar o Secret digitado; ao trocar o Client ID, informe também o novo Secret.
-2. O menu lateral tem grupos expansíveis na ordem **Dispositivos**, **Sessões**, **Clusters**, **Geocercas** e **Configurações**. Nos três primeiros, abra **Coletas e indicadores**; em **Geocercas**, abra **Dashboard**. Busque por nome/UUID, selecione o registro e use **Atualizar registros** para renovar o catálogo. **Geocercas → Geocercas no mapa** abre a seleção independente de polígonos.
-3. Sessões consultam indicadores automaticamente. Nas demais áreas, escolha início/fim e clique em **Consultar indicadores**. As datas usam o fuso exibido do dispositivo/cluster; geocercas usam UTC.
-4. Veja total, condição e médias na tabela. Geocercas apresentam também mínimos e máximos.
-5. **Adicionar coletas ao mapa** carrega o GeoJSON diretamente, sem pré-visualização em textarea. **Adicionar limite da geocerca ao mapa** cria seu polígono WGS 84 na cor cadastrada.
+## Relatórios públicos complementares de sessão
 
-Alterar registro ou período limpa os indicadores anteriores. Cada adição cria uma nova camada persistida no perfil QGIS.
+Para uma sessão do catálogo autorizado, a aba **Relatórios da sessão** usa as rotas já existentes:
 
-### Geocercas no mapa
+- GET /v1/device-sessions/{uuid}/collects/range: extremos e instantes.
+- GET /v1/device-sessions/{uuid}/aggregation: contagem por condição.
+- GET /v1/device-sessions/{uuid}/changes: mudanças persistentes.
+- GET /v1/device-sessions/{uuid}/changes/detail: detalhe, série e localização; duplo clique na mudança.
 
-A seção **Geocercas no mapa** é independente do dashboard **Geocercas**: possui catálogo, seleção e requisições próprios, sem consultar indicadores, períodos ou coletas. Atualize a lista, busque por nome/UUID e marque as geocercas desejadas. **Marcar todas as visíveis** respeita a busca; **Desmarcar todas** limpa também as marcações ocultas. O contador informa quantas selecionadas estão fora do filtro; elas também serão adicionadas.
+Essas rotas têm política de acesso própria e **não recebem os cabeçalhos de credenciais da integração**. Não substituem silenciosamente /sessions/.... Aggregation é contagem por condição, não série horária de temperatura. Detecção e validadores continuam sendo calculados pelo backend.
 
-**Adicionar selecionadas ao QGIS** cria uma camada e um arquivo GeoJSON separados para cada geocerca. A borda é sólida e o preenchimento tem 25% de opacidade. Ambos usam `color`; se o catálogo fornecer cores distintas, a borda usa `borderColor` ou `strokeColor` e o fundo usa `fillColor` ou `backgroundColor`. Cores ausentes ou inválidas usam a cor base, com verde como alternativa. O tooltip nativo mostra somente o nome: ative a camada desejada e passe o mouse sobre a geocerca com as dicas de mapa habilitadas. As cores e o tooltip são preservados ao salvar o projeto.
+## Mapas compartilhados
 
-Geocercas inválidas são informadas individualmente e continuam marcadas para nova tentativa; as adicionadas são desmarcadas. A interface usa `qgis.PyQt` e enums com escopo compatíveis com Qt5/Qt6. Os testes desta funcionalidade foram executados no QGIS 3.44; QGIS 4/Qt6 ainda precisa de validação em execução.
+Em **Compartilhados → Mapas por código**, informe um código existente. O plugin consulta /v1/map-links/{code} e exporta coletas via /v1/map-links/{uuid}/export?format=geojson, sem exigir/enviar credenciais de integração. O código não é salvo no projeto ou na procedência.
 
-Os pontos chegam coloridos pelo campo `markerColor` de cada coleta, aceitando hexadecimal `#RRGGBB` ou `#RGB`. Campo ausente, nulo ou inválido usa cinza. Nenhum outro campo de cor é utilizado. A simbologia fica salva junto ao projeto QGIS; camadas já carregadas antes desta alteração precisam ser adicionadas novamente para receber esse estilo.
+Nome, dispositivos, fuso e intervalo vêm do compartilhamento; seu período não é substituído por Hoje. A camada pode ser analisada/exportada. O fundo cadastrado pode ser adicionado quando fornece modelo XYZ HTTPS com {z}/{x}/{y}. Isso não cria um catálogo administrativo de mapas. A renovação de compartilhamentos é manual nessa seção.
 
-Ao adicionar uma camada, o plugin ativa as dicas de mapa do QGIS. Passe o mouse sobre um ponto da camada ativa para ver o cartão com dispositivo, condição, leituras e demais dados. O cabeçalho usa `condition.hex` (coluna `condition_hex`), com `markerColor` como alternativa e cinza se nenhuma cor for válida. As seções são construídas com os campos disponíveis; valores nulos, false, textos vazios e coleções vazias não aparecem, enquanto zero é preservado. Campos de fonte, use_queue, has_geolocation, is_working, device_id, identificadores da condição e estado de movimento são ocultados. Presença territorial e distância são agrupadas (por exemplo, Água · 12,00 m), sem has_ ou true; nomes conhecidos são traduzidos e novos nomes continuam visíveis. day/night aparecem como Dia/Noite. O tipo de firmware precede a versão, exibida em badge. A bateria usa badge verde de 75 a 100%, amarelo de 50 a menos de 75%, laranja de 25 a menos de 50% e vermelho de 0 a menos de 25%. O raio aparece uma única vez, sem casas decimais (por exemplo, 200 m), mesmo quando repetido nos objetos territoriais. Métricas novas aparecem automaticamente. As métricas conhecidas exibem unidades padrão (°C, %, hPa, m e dB); campos de unidade enviados com a métrica (`unit` ou `unidade`) têm prioridade. Métricas desconhecidas continuam aparecendo, com unidade quando fornecida. As coordenadas aparecem discretamente no topo, acima do status e da data, preservando a precisão recebida e com quebra de linha para valores longos. Os demais valores numéricos, exceto o raio, são apresentados com duas casas decimais e vírgula decimal; o valor original da camada é preservado. Não há conversões de unidades. O cartão usa três métricas por linha, reúne velocidade, rede, bateria, firmware e período, destaca o contexto territorial com distâncias e raio e omite seções sem dados. O tooltip é salvo no projeto e usa HTML, expressões nativas QGIS e um script local de dimensionamento, sem recursos externos. O cartão mantém altura natural, quebra textos longos e permite rolagem interna quando ultrapassa o espaço que o QGIS disponibiliza; nenhuma métrica é truncada. O GeoJSON original não é alterado.
+## Precisão, origem e limites
 
-Indicadores são exibidos em tabela, com métricas dinâmicas calculadas pela API. Respostas vazias, falhas de rede e erros de formato são informados na janela. Fechar a janela cancela a requisição pendente. Redirecionamentos são recusados para evitar encaminhar credenciais; configure a URL final.
+- Indicadores podem contar coletas sem GPS; GeoJSON exclui coordenadas inválidas. Algumas rotas usam fim exclusivo e outras inclusivo. O plugin explicita essa diferença, sem mudar regras do servidor. O intervalo padrão é enviado literalmente até 23:59:59.
+- Resumos locais usam registros baixados, sem ponderação por sensor/tempo ou remoção automática de outliers. Condição ambiental não certifica qualidade metrológica.
+- Procedência inclui recurso, período, fuso, versão, URL pública, download e SHA-256 do JSON canônico. O formato do hash está descrito na ficha; não é um hash do GPKG/arquivo transformado. Não contém credenciais.
+- Arquivos no perfil QGIS são snapshots e não são criptografados pelo plugin. Compartilhe um estudo portátil para evitar depender do caminho do perfil.
+- Unidades fornecidas têm prioridade; defaults conhecidos são mantidos. Não há conversão de unidades.
+- Não há novos endpoints, cursor, atualização delta, algoritmos científicos de qualidade/conforto/interpolação, escrita no J3M ou migração do admin. Relatórios meteorológicos/diários/mensais e catálogos administrativos completos dependem de novos contratos de integração.
 
-## Contrato e pontos de adaptação
+## Desenvolvimento e validação
 
-Contrato atualizado conforme `QGIS_INTEGRATION_HANDOFF.md`:
+Módulos: dialog (consulta), workbench (análise), analysis (resumos), charts (Qt), cartography (estilo/temporalidade/exportação), shared_maps (compartilhamentos), api (rede), settings (cofre), layers (OGR), map_tips e geofences.
 
-- `GET /{scope}` para `sessions`, `devices`, `clusters` e `geofences`.
-- `GET /{scope}/{uuid}/indicators` e `/collections?format=geojson`.
-- `GET /geofences/{uuid}/table` para mínimo/máximo.
-- `start_date` e `end_date` em `yyyy-MM-dd HH:mm:ss`, obrigatórios fora de sessões.
+dialog.ui continua legado e não é empacotado. scripts/package.py usa uma lista explícita de arquivos. ENDPOINT_VERSIONS continua permitindo versão por operação nas rotas de integração.
 
-Catálogos usam `{data: [...], success: true}`, UUID interno e nome visível. Médias aceitam objeto ou lista conforme o recurso. Geocercas fecham o anel usando longitude antes de latitude.
+Execute `-m unittest discover -s tests -p 'test_*.py'` no Python do QGIS, com QT_QPA_PLATFORM=offscreen e QGIS_CUSTOM_CONFIG_PATH apontando para um perfil temporário. Exemplo de interpretador: C:/Program Files/QGIS 3.44.15/bin/python-qgis-ltr.bat.
 
-As coletas são solicitadas exclusivamente com `format=geojson`, recebendo `FeatureCollection` direto. A leitura OGR usa `FLATTEN_NESTED_ATTRIBUTES=YES` para expor objetos como colunas, por exemplo `collects_temperatura`, sem fixar nomes de métricas. O provedor reúne os campos encontrados em todas as feições; um campo ausente em determinado registro aparece como NULL, não zero. O arquivo GeoJSON mantém o conteúdo original aninhado. Arrays e tipos heterogêneos seguem a representação do OGR; não são transformados em um esquema fixo. A opção de leitura é descrita na [documentação oficial do driver GeoJSON](https://gdal.org/en/stable/drivers/vector/geojson.html).
+tests/render_workbench_fixture.py gera capturas reais de widgets Qt com dados locais, sem rede/credenciais, para consulta, análise, exportação e modo compacto/escuro. A API publicada com credenciais reais não foi exercitada; contratos usam respostas locais/mocks e recursos reais do QGIS.
 
-O 404 com a mensagem documentada `There is no data for the provided parameters.` ou `No data found.` é tratado como ausência de dados nos indicadores/coletas. Outros 404 continuam sendo erro de recurso inexistente ou inacessível, sem tentar distinguir contas. Há mensagens específicas para 401/403, 422 e 429; corpos de erro do backend não são exibidos. O JSON alternativo de coletas não é usado pelo plugin.
+## Licença
 
-## Desenvolvimento e validação manual
-
-- `j3m_connect.py`: lifecycle, menu e barra de ferramentas.
-- `dialog.py`: construção da interface Qt e fluxo de navegação. `dialog.ui` é legado e não é carregado nem empacotado.
-- `settings.py`: URL e cofre de autenticação QGIS.
-- `api.py`: HTTP assíncrono via QgsNetworkAccessManager, timeout configurável em segundos e sem limite de tamanho de resposta.
-- `adapters.py`: adaptação simples das respostas em desenvolvimento.
-- `layers.py`: validação e carregamento de GeoJSON via OGR.
-- `scripts/package.py`: empacotamento local, sem dependências.
-
-Use o Python fornecido pelo QGIS para executar código que importe `qgis`. A interface é construída em `dialog.py`. Após alterações, desabilite/habilite o plugin e reinicie o QGIS para recarregar todos os módulos com segurança.
-
-Para validar GeoJSON sem API, no console Python do QGIS:
-
-```python
-from j3m_connect.layers import add_geojson_layer
-sample = {"type": "FeatureCollection", "features": [
-    {"type": "Feature", "properties": {"exemplo": "Validação local"},
-     "geometry": {"type": "Point", "coordinates": [-46.63, -23.55]}}
-]}
-layer = add_geojson_layer(sample, "J3M — validação local")
-iface.setActiveLayer(layer)
-iface.zoomToActiveLayer()
-```
-
-Verifique também a abertura/fechamento da janela, desativação do complemento, configuração incompleta, URL inválida e respostas 401/403, 404, 500, JSON inválido e ausência de dados quando houver API de desenvolvimento disponível. Não há testes unitários nesta etapa.
-
-## Estado e limitações
-
-Estrutura instalável e fluxos adaptados aos exemplos fornecidos da API; a conexão com o servidor publicado ainda depende da validação com credenciais válidas. Não inclui edição, envio de coletas, criação de sessões, processamento espacial, filtros avançados ou sincronização offline. Catálogos ficam em memória durante o uso da janela.
-
-As camadas são cópias locais estáticas em GeoJSON, armazenadas em `j3m_connect/layers` dentro do perfil ativo do QGIS. Esses arquivos permanecem após fechar o plugin, permitindo reabrir projetos; não os apague enquanto houver projetos referenciando-os. Cada carregamento gera um arquivo novo. Para compartilhar um projeto, exporte/empacote também as camadas. Os dados locais não são criptografados pelo plugin. Respostas vazias não criam camadas. Coleções com geometrias mistas dependem do suporte do OGR/QGIS e não são divididas automaticamente.
-
-Distribuição local pronta. Publicação no catálogo oficial ainda requer definir e preencher email de manutenção e URL real do repositório em `metadata.txt`; estes dados não foram inventados.
-
-Validação inicial executada com PyQGIS **3.44.13** no Windows, em modo sem janela e perfil temporário: imports/sintaxe, formulário Qt, lifecycle com interface simulada, cofre de autenticação real, HTTP contra servidor local temporário e camada GeoJSON via OGR. A API J3M real e a interação visual no QGIS Desktop ainda precisam ser verificadas. As demais versões declaradas não foram executadas neste ambiente.
-
-Os exemplos fornecidos em 14/09/2026 também foram validados nesse ambiente: sessões por UUID/nome, indicadores com campos dinâmicos e GeoJSON com registros adicionais contendo métricas novas, ausentes e nulas. A verificação local confirmou as colunas OGR, a preservação do GeoJSON no disco e as respostas HTTP 401/404/422/429, incluindo a distinção de ausência de dados. Os arquivos temporários de validação não integram o repositório ou o pacote.
-
-## Licença e referências
-
-GPL-3.0-or-later, conforme `LICENSE`. Estrutura baseada na [documentação oficial de plugins QGIS](https://docs.qgis.org/3.40/en/docs/pyqgis_developer_cookbook/plugins/plugins.html), com credenciais no [sistema de autenticação QGIS](https://docs.qgis.org/3.40/en/docs/pyqgis_developer_cookbook/authentication.html).
+Consulte j3m_connect/LICENSE. Esta versão não altera o texto da licença ou os avisos de copyright existentes.
