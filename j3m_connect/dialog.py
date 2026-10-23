@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Modeless resource browser with secure connection settings."""
+from .i18n import tr
+from .i18n import LANGUAGES, LANGUAGE_KEY, set_language, value_label, language
 import json
-from qgis.PyQt.QtCore import QDateTime, Qt, QTimeZone, QTimer, QTime
+from qgis.PyQt.QtCore import QDateTime, Qt, QTimeZone, QTimer, QTime, QLocale, pyqtSignal
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDateTimeEdit, QDialog, QDockWidget,
@@ -19,6 +21,7 @@ from .geofences import GeofencesPage
 from .workbench import Workbench, grid, fill
 from .cartography import configure_layer, provenance, VERSION
 from .shared_maps import SharedMapsPage
+from .map_tips import LABELS
 
 TITLES = {'devices': 'Dispositivos — Coletas e indicadores',
           'sessions': 'Sessões — Coletas e indicadores',
@@ -31,7 +34,7 @@ MENU = (
     ('Geocercas', (('Dashboard', 'geofences'), ('Geocercas no mapa', 'geofences_map'))),
     ('Análise', (('Camadas e estudos', 'workbench'),)),
     ('Compartilhados', (('Mapas por código', 'shared_maps'),)),
-    ('Configurações', (('Conexão', 'connection'),)),
+    ('Configurações', (('Conexão', 'connection'), ('Idioma', 'language'))),
 )
 COLORS = {'blue': '#0284c7', 'green': '#16a34a', 'yellow': '#ca8a04',
           'orange': '#ea580c', 'red': '#dc2626', 'purple': '#7e22ce'}
@@ -45,8 +48,11 @@ def label(text=''):
 
 
 class J3MDialog(QDockWidget):
+    languageChanged = pyqtSignal()
+
     def __init__(self, iface):
         super().__init__(iface.mainWindow())
+        self.setLocale(QLocale(language().replace('-', '_')))
         self.iface = iface
         self.api = ApiClient(self)
         self.layerLoader = LayerLoader(self)
@@ -76,13 +82,13 @@ class J3MDialog(QDockWidget):
         brand.setFont(brand_font)
         brand.setContentsMargins(6,6,6,6)
         header.addWidget(brand, 1)
-        self.navigationButton = QPushButton('Menu')
+        self.navigationButton = QPushButton(tr('Menu'))
         self.navigationButton.setCheckable(True)
         self.navigationButton.setChecked(True)
         header.addWidget(self.navigationButton)
-        floatButton = QPushButton('Flutuar')
+        floatButton = QPushButton(tr('Flutuar'))
         floatButton.clicked.connect(lambda: self.setFloating(not self.isFloating()))
-        self.topLevelChanged.connect(lambda floating: floatButton.setText('Acoplar' if floating else 'Flutuar'))
+        self.topLevelChanged.connect(lambda floating: floatButton.setText(tr('Acoplar') if floating else tr('Flutuar')))
         header.addWidget(floatButton)
         layout.addLayout(header)
         body = QSplitter(Qt.Orientation.Horizontal)
@@ -93,16 +99,16 @@ class J3MDialog(QDockWidget):
         self.menu.setMinimumWidth(130)
         self.menu.setMaximumWidth(220)
         self.navigationButton.toggled.connect(self.menu.setVisible)
-        self.menu.setAccessibleName('Navegação J3M')
+        self.menu.setAccessibleName(tr('Navegação J3M'))
         self.menuItems = {}
         for title, entries in MENU:
-            group = QTreeWidgetItem(self.menu, [title])
+            group = QTreeWidgetItem(self.menu, [tr(title)])
             group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsSelectable)
             font = group.font(0)
             font.setBold(True)
             group.setFont(0, font)
             for caption, route in entries:
-                item = QTreeWidgetItem(group, [caption])
+                item = QTreeWidgetItem(group, [tr(caption)])
                 item.setData(0, Qt.ItemDataRole.UserRole, route)
                 self.menuItems[route] = item
             group.setExpanded(False)
@@ -112,21 +118,21 @@ class J3MDialog(QDockWidget):
         body.setStretchFactor(1, 1)
         self.browser = QWidget()
         panel = QVBoxLayout(self.browser)
-        self.title = label(TITLES[self._scope])
+        self.title = label(tr(TITLES[self._scope]))
         self.title.setStyleSheet('font-size: 20px; font-weight: bold;')
         panel.addWidget(self.title)
         self.search = QLineEdit()
-        self.search.setPlaceholderText('Buscar registros por nome ou UUID…')
+        self.search.setPlaceholderText(tr('Buscar registros por nome ou UUID…'))
         panel.addWidget(self.search)
         self.records = QComboBox()
         panel.addWidget(self.records)
-        self.refreshButton = QPushButton('Atualizar registros')
+        self.refreshButton = QPushButton(tr('Atualizar registros'))
         panel.addWidget(self.refreshButton)
         saved = QHBoxLayout()
         self.savedQueries = QComboBox()
-        self.savedQueries.setAccessibleName('Consultas salvas no projeto')
+        self.savedQueries.setAccessibleName(tr('Consultas salvas no projeto'))
         saved.addWidget(self.savedQueries, 1)
-        for caption, handler in [('Salvar consulta',self._save_query),('Abrir',self._load_query),('Excluir',self._remove_query)]:
+        for caption, handler in [(tr('Salvar consulta'),self._save_query),(tr('Abrir'),self._load_query),(tr('Excluir'),self._remove_query)]:
             button = QPushButton(caption)
             button.clicked.connect(handler)
             saved.addWidget(button)
@@ -142,65 +148,65 @@ class J3MDialog(QDockWidget):
         for edit in (self.start, self.end):
             edit.setCalendarPopup(True)
             edit.setDisplayFormat('dd/MM/yyyy HH:mm:ss')
-        form.addRow('Início', self.start)
-        form.addRow('Fim', self.end)
+        form.addRow(tr('Início'), self.start)
+        form.addRow(tr('Fim'), self.end)
         self.timezone = label()
-        form.addRow('Fuso horário', self.timezone)
+        form.addRow(tr('Fuso horário'), self.timezone)
         self.utcLabel = label()
-        form.addRow('Equivalente UTC', self.utcLabel)
+        form.addRow(tr('Equivalente UTC'), self.utcLabel)
         quick = QHBoxLayout()
-        for caption, preset in [('Hoje','today'),('Ontem','yesterday'),('7 dias','week'),('24 horas','day')]:
+        for caption, preset in [(tr('Hoje'),'today'),(tr('Ontem'),'yesterday'),(tr('7 dias'),'week'),(tr('24 horas'),'day')]:
             button = QPushButton(caption)
             button.clicked.connect(lambda checked=False, value=preset: self._quick_period(value))
             quick.addWidget(button)
         form.addRow(quick)
         panel.addWidget(self.periodBox)
-        self.consultButton = QPushButton('Consultar indicadores')
+        self.consultButton = QPushButton(tr('Consultar indicadores'))
         panel.addWidget(self.consultButton)
-        self.summary = label('Selecione um registro.')
+        self.summary = label(tr('Selecione um registro.'))
         self.summary.setStyleSheet('font-size: 14px; font-weight: 600; padding: 10px; border: 1px solid palette(mid); border-radius: 6px;')
         panel.addWidget(self.summary)
         self.cards = QGridLayout()
         panel.addLayout(self.cards)
         self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(['Métrica', 'Média', 'Unidade', 'Mínimo', 'Máximo'])
+        self.table.setHorizontalHeaderLabels([tr('Métrica'), tr('Média'), tr('Unidade'), tr('Mínimo'), tr('Máximo')])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.resultTabs = QTabWidget()
         self.resultTabs.setUsesScrollButtons(True)
-        self.resultTabs.addTab(self.table, 'Indicadores da API')
+        self.resultTabs.addTab(self.table, tr('Indicadores da API'))
         self.sessionPage = QWidget()
         sessionLayout = QVBoxLayout(self.sessionPage)
-        sessionLayout.addWidget(label('Relatórios públicos complementares da sessão selecionada. '
-            'Essas rotas têm acesso próprio e não recebem o Secret da integração.'))
+        sessionLayout.addWidget(label(tr('Relatórios públicos complementares da sessão selecionada. '
+            'Essas rotas têm acesso próprio e não recebem o Secret da integração.')))
         reportButtons = QHBoxLayout()
         self.reportButtons = []
-        for caption, kind in [('Extremos','range'),('Condições','aggregation'),('Mudanças','changes')]:
+        for caption, kind in [(tr('Extremos'),'range'),(tr('Condições'),'aggregation'),(tr('Mudanças'),'changes')]:
             button = QPushButton(caption)
             button.clicked.connect(lambda checked=False, report=kind: self._request(report))
             self.reportButtons.append(button)
             reportButtons.addWidget(button)
         sessionLayout.addLayout(reportButtons)
-        self.reportTable = grid(['Métrica', 'Mínimo', 'Máximo'])
+        self.reportTable = grid([tr('Métrica'), tr('Mínimo'), tr('Máximo')])
         self.reportTable.itemDoubleClicked.connect(self._change_detail)
         sessionLayout.addWidget(self.reportTable)
         self.reportText = QPlainTextEdit()
         self.reportText.setReadOnly(True)
         self.reportText.setMaximumHeight(140)
         sessionLayout.addWidget(self.reportText)
-        self.resultTabs.addTab(self.sessionPage, 'Relatórios da sessão')
+        self.resultTabs.addTab(self.sessionPage, tr('Relatórios da sessão'))
         panel.addWidget(self.resultTabs, 1)
-        panel.addWidget(label('O total do mapa pode diferir dos indicadores: a exportação exige coordenadas '
-            'e as rotas atuais não usam a mesma inclusão do instante final.'))
-        self.addButton = QPushButton('Adicionar coletas ao mapa')
-        self.polygonButton = QPushButton('Adicionar limite da geocerca ao mapa')
+        panel.addWidget(label(tr('O total do mapa pode diferir dos indicadores: a exportação exige coordenadas '
+            'e as rotas atuais não usam a mesma inclusão do instante final.')))
+        self.addButton = QPushButton(tr('Adicionar coletas ao mapa'))
+        self.polygonButton = QPushButton(tr('Adicionar limite da geocerca ao mapa'))
         panel.addWidget(self.addButton)
         panel.addWidget(self.polygonButton)
-        self.batchButton = QPushButton('Adicionar vários registros…')
+        self.batchButton = QPushButton(tr('Adicionar vários registros…'))
         self.batchButton.clicked.connect(self._choose_batch)
         panel.addWidget(self.batchButton)
-        self.replaceButton = QPushButton('Atualizar snapshot da camada selecionada')
+        self.replaceButton = QPushButton(tr('Atualizar snapshot da camada selecionada'))
         self.replaceButton.clicked.connect(self._replace)
         panel.addWidget(self.replaceButton)
         panel.removeWidget(self.addButton)
@@ -208,22 +214,41 @@ class J3MDialog(QDockWidget):
         self.pages.addWidget(self.browser)
         self.configPage = QWidget()
         config = QVBoxLayout(self.configPage)
-        config.addWidget(label('Conexão com a J3M'))
-        config.addWidget(label('Informe as credenciais da sua integração. Elas ficam protegidas no cofre de autenticação do QGIS.'))
+        languageForm = QFormLayout()
+        self.languageCombo = QComboBox()
+        self.languageCombo.setAccessibleName(tr('Idioma'))
+        for caption, code in [(tr('Automático (QGIS)'), ''),
+                              ('Português (Brasil)', LANGUAGES[0]),
+                              ('English (United States)', LANGUAGES[1]),
+                              ('Español (España)', LANGUAGES[2])]:
+            self.languageCombo.addItem(caption, code)
+        self.languageCombo.setCurrentIndex(max(0, self.languageCombo.findData(
+            QgsSettings().value(LANGUAGE_KEY, '', type=str))))
+        languageForm.addRow(tr('Idioma'), self.languageCombo)
+        self.languagePage = QWidget()
+        languageLayout = QVBoxLayout(self.languagePage)
+        languageLayout.addWidget(label(tr('Idioma')))
+        languageLayout.addLayout(languageForm)
+        self.applyLanguageButton = QPushButton(tr('Aplicar idioma'))
+        self.applyLanguageButton.clicked.connect(self._change_language)
+        languageLayout.addWidget(self.applyLanguageButton)
+        languageLayout.addStretch()
+        config.addWidget(label(tr('Conexão com a J3M')))
+        config.addWidget(label(tr('Informe as credenciais da sua integração. Elas ficam protegidas no cofre de autenticação do QGIS.')))
         fields = QFormLayout()
         self.clientEdit = QLineEdit()
         self.secretEdit = QLineEdit()
         self.secretEdit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.secretEdit.setPlaceholderText('Cole o Secret; vazio mantém o que já está salvo')
+        self.secretEdit.setPlaceholderText(tr('Cole o Secret; vazio mantém o que já está salvo'))
         fields.addRow('Client ID', self.clientEdit)
         fields.addRow('Client Secret', self.secretEdit)
         config.addLayout(fields)
-        self.showSecret = QCheckBox('Mostrar Secret digitado')
+        self.showSecret = QCheckBox(tr('Mostrar Secret digitado'))
         self.showSecret.toggled.connect(lambda show: self.secretEdit.setEchoMode(
             QLineEdit.EchoMode.Normal if show else QLineEdit.EchoMode.Password))
         config.addWidget(self.showSecret)
-        self.saveButton = QPushButton('Salvar e conectar')
-        self.removeButton = QPushButton('Remover conexão salva')
+        self.saveButton = QPushButton(tr('Salvar e conectar'))
+        self.removeButton = QPushButton(tr('Remover conexão salva'))
         config.addWidget(self.saveButton)
         config.addWidget(self.removeButton)
         config.addStretch()
@@ -235,23 +260,24 @@ class J3MDialog(QDockWidget):
         self.pages.addWidget(self.workbench)
         self.sharedMapsPage = SharedMapsPage(iface,self.workbench,self)
         self.pages.addWidget(self.sharedMapsPage)
+        self.pages.addWidget(self.languagePage)
         self.pages.removeWidget(self.browser)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.browser)
         self.pages.insertWidget(0, scroll)
-        self.statusLabel = label('Configure a conexão para começar.')
+        self.statusLabel = label(tr('Configure a conexão para começar.'))
         layout.addWidget(self.statusLabel)
         progressRow = QHBoxLayout()
         self.progressBar = QProgressBar()
         self.progressBar.setVisible(False)
         progressRow.addWidget(self.progressBar, 1)
-        self.cancelButton = QPushButton('Cancelar')
+        self.cancelButton = QPushButton(tr('Cancelar'))
         self.cancelButton.clicked.connect(self._cancel)
         self.cancelButton.setVisible(False)
         progressRow.addWidget(self.cancelButton)
         layout.addLayout(progressRow)
-        close = QPushButton('Fechar')
+        close = QPushButton(tr('Fechar'))
         close.clicked.connect(self.close)
         layout.addWidget(close)
         self.menu.currentItemChanged.connect(self._navigate)
@@ -322,21 +348,21 @@ class J3MDialog(QDockWidget):
         self.sharedMapsPage.cancel()
         self.secretEdit.clear()
         self.showSecret.setChecked(False)
-        self.pages.setCurrentIndex(1 if route == 'connection' else 2 if route == 'geofences_map' else 3 if route == 'workbench' else 4 if route=='shared_maps' else 0)
-        self.statusLabel.setVisible(route not in ('geofences_map', 'workbench','shared_maps'))
+        self.pages.setCurrentIndex(1 if route == 'connection' else 2 if route == 'geofences_map' else 3 if route == 'workbench' else 4 if route=='shared_maps' else 5 if route == 'language' else 0)
+        self.statusLabel.setVisible(route not in ('geofences_map', 'workbench','shared_maps', 'language'))
         if route=='shared_maps':
             return
         if route == 'workbench':
             self.workbench.refresh()
             return
-        if route == 'connection':
+        if route in ('connection', 'language'):
             return
         if route == 'geofences_map':
             if self._loaded:
                 self.geofencesPage.activate()
             return
         self._scope = route
-        self.title.setText(TITLES[route])
+        self.title.setText(tr(TITLES[route]))
         self.periodBox.setVisible(route != 'sessions')
         self.polygonButton.setVisible(self._scope == 'geofences')
         self.resultTabs.setTabEnabled(1, self._scope == 'sessions')
@@ -348,6 +374,15 @@ class J3MDialog(QDockWidget):
         self._filter()
         if self._loaded and self._scope not in self._cache:
             self._refresh()
+
+    def _change_language(self):
+        self._cancel()
+        self.geofencesPage.cancel()
+        self.sharedMapsPage.cancel()
+        self.workbench.cancel_tasks()
+        set_language(self.languageCombo.currentData())
+        self.statusLabel.setText(tr('Idioma alterado. Feche e abra o painel para aplicar à interface.'))
+        self.languageChanged.emit()
 
     def _save(self):
         try:
@@ -369,14 +404,14 @@ class J3MDialog(QDockWidget):
             self._metric_units.clear()
             self.geofencesPage.reset()
             self._filter()
-            self.statusLabel.setText('Conexão removida. Informe novas credenciais para continuar.')
+            self.statusLabel.setText(tr('Conexão removida. Informe novas credenciais para continuar.'))
         except ValueError as error:
             self._error(str(error))
 
     def _refresh(self):
         self._cache.pop(self._scope, None)
         self._filter()
-        self.statusLabel.setText('Carregando registros…')
+        self.statusLabel.setText(tr('Carregando registros…'))
         self.api.get('catalog', scope=self._scope)
 
     def _filter(self):
@@ -400,9 +435,9 @@ class J3MDialog(QDockWidget):
         self.api.cancel()
         self._period_changed()
         record = self.records.currentData()
-        self.details.setText('UUID: ' + record['uuid'] if record else 'Nenhum registro disponível.')
+        self.details.setText('UUID: ' + record['uuid'] if record else tr('Nenhum registro disponível.'))
         zone = 'UTC' if self._scope == 'geofences' else ((record or {}).get('timezone') or ((record or {}).get('device') or {}).get('timezone'))
-        self.timezone.setText(str(zone or 'Não informado pela API'))
+        self.timezone.setText(str(zone or tr('Não informado pela API')))
         if zone:
             self._set_zone(zone)
         context = (self._scope,record['uuid']) if record else None
@@ -413,19 +448,19 @@ class J3MDialog(QDockWidget):
         if record:
             device = record.get('device') or record
             details = ['UUID: '+record['uuid']]
-            for key, caption in [('type','Tipo'),('mode','Modo'),('battery','Bateria (%)'),
-                                 ('lastCollect','Última coleta'),('status','Status'),('validator','Validador')]:
+            for key, caption in [('type',tr('Tipo')),('mode',tr('Modo')),('battery',tr('Bateria (%)')),
+                                 ('lastCollect',tr('Última coleta')),('status',tr('Status')),('validator',tr('Validador'))]:
                 if device.get(key) is not None:
-                    details.append(caption+': '+str(device[key]))
+                    details.append(caption+': '+value_label(key, device[key]))
             if self._scope == 'sessions':
-                details.extend(['Período: '+str(record.get('startDate','—'))+' a '+str(record.get('endDate','—')),
-                                'Observação: '+str(record.get('obs') or '—'),
-                                'Sessão ao vivo: '+('Sim (atualização manual)' if record.get('isLive') else 'Não')])
+                details.extend([tr('Período: ')+str(record.get('startDate','—'))+tr(' a ')+str(record.get('endDate','—')),
+                                tr('Observação: ')+str(record.get('obs') or '—'),
+                                tr('Sessão ao vivo: ')+(tr('Sim (atualização manual)') if record.get('isLive') else tr('Não'))])
             if record.get('description'):
                 details.append(str(record['description']))
             self.details.setText('\n'.join(details))
         if record and self._scope == 'clusters':
-            self.details.setText(self.details.text() + '\nDispositivos: ' + ', '.join(
+            self.details.setText(self.details.text() + tr('\nDispositivos: ') + ', '.join(
                 str(d.get('name', d.get('uuid', ''))) for d in record.get('devices', []) if isinstance(d, dict)))
         self._set_busy(False)
         if record and self._scope == 'sessions':
@@ -438,8 +473,8 @@ class J3MDialog(QDockWidget):
                 if item.widget():
                     item.widget().deleteLater()
         self.table.setRowCount(0)
-        self.summary.setText('Consulte os indicadores para o registro e período selecionados.')
-        self.statusLabel.setText('Pronto para consultar.')
+        self.summary.setText(tr('Consulte os indicadores para o registro e período selecionados.'))
+        self.statusLabel.setText(tr('Pronto para consultar.'))
         if hasattr(self, 'reportTable'):
             self.reportTable.setRowCount(0)
             self.reportText.clear()
@@ -456,23 +491,23 @@ class J3MDialog(QDockWidget):
         period = None
         if self._scope != 'sessions':
             if self.end.dateTime() <= self.start.dateTime():
-                self._error('A data final deve ser posterior à data inicial.')
+                self._error(tr('A data final deve ser posterior à data inicial.'))
                 return
             if self._scope in ('devices', 'clusters') and not record.get('timezone'):
-                self._error('O recurso não informa seu fuso horário. Atualize o catálogo antes de consultar.')
+                self._error(tr('O recurso não informa seu fuso horário. Atualize o catálogo antes de consultar.'))
                 return
             if not QTimeZone(self._zone.encode('utf-8')).isValid() or (
                     self._scope in ('devices','clusters') and not QTimeZone(str(record.get('timezone','')).encode('utf-8')).isValid()):
-                self._error('O recurso informa um fuso inválido. Atualize o catálogo.')
+                self._error(tr('O recurso informa um fuso inválido. Atualize o catálogo.'))
                 return
             period = tuple(edit.dateTime().toString('yyyy-MM-dd HH:mm:ss') for edit in (self.start, self.end))
         if kind in ('range','aggregation','changes') and (self._scope != 'sessions' or
                 not any(r['uuid']==record['uuid'] for r in self._cache.get('sessions',[]))):
-            self._error('Escolha uma sessão do catálogo autorizado.')
+            self._error(tr('Escolha uma sessão do catálogo autorizado.'))
             return
         self._pending_query = (self._scope, dict(record), period)
-        self.statusLabel.setText('Consultando ' + {'indicators': 'indicadores', 'table': 'mínimos e máximos', 'collections': 'coletas',
-            'range':'extremos da sessão','aggregation':'condições da sessão','changes':'mudanças da sessão'}[kind] + '…')
+        self.statusLabel.setText(tr('Consultando ') + {'indicators': tr('indicadores'), 'table': tr('mínimos e máximos'), 'collections': tr('coletas'),
+            'range':tr('extremos da sessão'),'aggregation':tr('condições da sessão'),'changes':tr('mudanças da sessão')}[kind] + '…')
         self.api.get(kind, record['uuid'], scope=self._scope, period=period)
 
     def _consult(self):
@@ -510,9 +545,9 @@ class J3MDialog(QDockWidget):
                 if query and query.get('scope') == self._scope:
                     self._deferred_query = None
                     if not self._apply_query(query):
-                        self.statusLabel.setText('A consulta salva não está disponível no catálogo autorizado.')
+                        self.statusLabel.setText(tr('A consulta salva não está disponível no catálogo autorizado.'))
                 if not self._busy:
-                    self.statusLabel.setText('{} registro(s) disponível(is).'.format(self.records.count()))
+                    self.statusLabel.setText(tr('{} registro(s) disponível(is).').format(self.records.count()))
             elif kind == 'indicators':
                 summary, rows = indicator_rows(payload)
                 self.summary.setText(summary)
@@ -526,37 +561,40 @@ class J3MDialog(QDockWidget):
                     scope, source, period = self._pending_query
                     self._indicator_counts[(scope, source['uuid'], tuple(period or []))] = (_response_data(payload) or {}).get('totalCollects')
                 from .analysis import display
-                from .map_tips import LABELS
                 for index, values in enumerate(rows[:4]):
-                    card = label(LABELS.get(values[0],str(values[0]))+'\n'+display(values[1])+' '+str(values[2]))
+                    card = label(tr(LABELS.get(values[0],str(values[0])))+'\n'+display(values[1])+' '+str(values[2]))
                     card.setStyleSheet('font-size: 13px; font-weight: 600; padding: 10px; border: 1px solid palette(mid); '
                                       'border-left: 4px solid '+COLORS.get(values[3],'#808080')+'; border-radius: 5px;')
-                    card.setAccessibleName(str(values[0])+' média '+display(values[1]))
+                    card.setAccessibleName(tr(LABELS.get(values[0], str(values[0])))+tr(' média ')+display(values[1]))
                     self.cards.addWidget(card,index//2,index%2)
                 for row, values in enumerate(rows):
                     for col, value in enumerate(values[:3]):
-                        item = QTableWidgetItem(str(value))
+                        item = QTableWidgetItem(tr(LABELS.get(str(value), str(value))) if col == 0 else str(value))
+                        if col == 0:
+                            item.setData(Qt.ItemDataRole.UserRole, str(value))
                         if col == 1 and values[3] in COLORS:
                             item.setForeground(QColor(COLORS[values[3]]))
                         self.table.setItem(row, col, item)
-                self.statusLabel.setText('Indicadores atualizados.')
+                self.statusLabel.setText(tr('Indicadores atualizados.'))
                 if self._scope == 'geofences':
                     self._request('table')
             elif kind == 'table':
                 rows = _response_data(payload) or []
                 if not isinstance(rows, list) or any(not isinstance(r, dict) for r in rows):
-                    raise ValueError('Tabela de geocerca inválida.')
+                    raise ValueError(tr('Tabela de geocerca inválida.'))
                 for entry in rows:
                     metric = str(entry.get('metric', '—'))
                     row = next((r for r in range(self.table.rowCount())
-                                if self.table.item(r, 0).text() == metric), self.table.rowCount())
+                                if self.table.item(r, 0).data(Qt.ItemDataRole.UserRole) == metric), self.table.rowCount())
                     if row == self.table.rowCount():
                         self.table.insertRow(row)
-                        self.table.setItem(row, 0, QTableWidgetItem(metric))
+                        item = QTableWidgetItem(tr(LABELS.get(metric, metric)))
+                        item.setData(Qt.ItemDataRole.UserRole, metric)
+                        self.table.setItem(row, 0, item)
                         self.table.setItem(row, 2, QTableWidgetItem(str(entry.get('unit', ''))))
                     for col, key in ((3, 'min'), (4, 'max')):
                         self.table.setItem(row, col, QTableWidgetItem(str(entry.get(key, '—'))))
-                self.statusLabel.setText('Indicadores e mínimos/máximos atualizados.' if rows else 'Sem mínimos/máximos disponíveis no período.')
+                self.statusLabel.setText(tr('Indicadores e mínimos/máximos atualizados.') if rows else tr('Sem mínimos/máximos disponíveis no período.'))
             elif kind == 'collections':
                 self._add_layer(payload)
             elif kind in ('range','aggregation','changes','change_detail'):
@@ -567,7 +605,7 @@ class J3MDialog(QDockWidget):
     def _add_layer(self, payload, polygon=False):
         if payload is None:
             self._replace_id = None
-            self.statusLabel.setText('Nenhuma coleta disponível no período.')
+            self.statusLabel.setText(tr('Nenhuma coleta disponível no período.'))
             if self._batch:
                 QTimer.singleShot(0, self._next_batch)
             return
@@ -575,11 +613,11 @@ class J3MDialog(QDockWidget):
         name = 'J3M — ' + record.get('name', self.records.currentText())
         if not polygon:
             dates = period or [record.get('startDate'), record.get('endDate')]
-            name += ' — ' + ' a '.join(str(value or '—') for value in dates)
+            name += ' — ' + tr(' a ').join(str(value or '—') for value in dates)
         def finish(layer, digest):
             if layer is None:
                 self._replace_id = None
-                self.statusLabel.setText('Nenhuma coleta com coordenadas disponível.')
+                self.statusLabel.setText(tr('Nenhuma coleta com coordenadas disponível.'))
                 if self._batch:
                     QTimer.singleShot(0, self._next_batch)
                 return
@@ -615,10 +653,10 @@ class J3MDialog(QDockWidget):
                 self.workbench.focus_layer(layer)
             self.iface.setActiveLayer(layer)
             self.iface.actionMapTips().setChecked(True)
-            self.statusLabel.setText('Camada adicionada ao mapa e salva no perfil QGIS.')
+            self.statusLabel.setText(tr('Camada adicionada ao mapa e salva no perfil QGIS.'))
             if self._batch:
                 QTimer.singleShot(0, self._next_batch)
-        self.statusLabel.setText('Preparando a camada em segundo plano…')
+        self.statusLabel.setText(tr('Preparando a camada em segundo plano…'))
         self.layerLoader.load(payload,name,finish,geofence=polygon)
 
     def _polygon(self):
@@ -652,18 +690,18 @@ class J3MDialog(QDockWidget):
         self._replace_id = None
         self.layerLoader.cancel()
         self.api.cancel()
-        self.statusLabel.setText('Operação cancelada. As camadas concluídas foram preservadas.')
+        self.statusLabel.setText(tr('Operação cancelada. As camadas concluídas foram preservadas.'))
 
     def _progress(self, done, total):
         if total > 0:
             self.progressBar.setRange(0,100)
             self.progressBar.setValue(int(done*100/total))
-        self.statusLabel.setText('Recebendo {:.1f} MB…'.format(done/1024/1024))
+        self.statusLabel.setText(tr('Recebendo {:.1f} MB…').format(done/1024/1024))
 
     def _set_zone(self, name):
         zone, old = QTimeZone(str(name).encode('utf-8')), QTimeZone(self._zone.encode('utf-8'))
         if not zone.isValid():
-            self.timezone.setText(str(name)+' (fuso inválido)')
+            self.timezone.setText(str(name)+tr(' (fuso inválido)'))
             return
         if name != self._zone:
             for edit in (self.start,self.end):
@@ -710,7 +748,15 @@ class J3MDialog(QDockWidget):
         record = self.records.currentData()
         if not record or self._busy:
             return
-        name, ok = QInputDialog.getText(self,'Salvar consulta','Nome',text=record['name'])
+        prompt = QInputDialog(self)
+        prompt.setWindowTitle(tr('Salvar consulta'))
+        prompt.setLabelText(tr('Nome'))
+        prompt.setTextValue(record['name'])
+        prompt.setOkButtonText(tr('Salvar consulta'))
+        prompt.setCancelButtonText(tr('Cancelar'))
+        ok = prompt.exec() == QDialog.DialogCode.Accepted
+        name = prompt.textValue()
+        prompt.deleteLater()
         if not ok or not name.strip():
             return
         queries = [q for q in self._queries() if q.get('name')!=name.strip()]
@@ -719,7 +765,7 @@ class J3MDialog(QDockWidget):
                         'end':self.end.dateTime().toString('yyyy-MM-dd HH:mm:ss'),'timezone':self._zone})
         QgsProject.instance().writeEntry('J3MConnect','queries',json.dumps(queries,ensure_ascii=False))
         self._reload_queries()
-        self.statusLabel.setText('Consulta guardada no projeto. Salve o projeto QGIS para persistir.')
+        self.statusLabel.setText(tr('Consulta guardada no projeto. Salve o projeto QGIS para persistir.'))
 
     def _remove_query(self):
         current = self.savedQueries.currentData()
@@ -756,10 +802,10 @@ class J3MDialog(QDockWidget):
 
     def _choose_batch(self):
         dialog = QDialog(self)
-        dialog.setWindowTitle('Adicionar registros do catálogo autorizado')
+        dialog.setWindowTitle(tr('Adicionar registros do catálogo autorizado'))
         layout = QVBoxLayout(dialog)
-        layout.addWidget(label('Dispositivos, clusters e geocercas usam o período digitado no fuso de cada recurso. '
-                              'Sessões usam seu próprio intervalo. Cada consulta cria uma camada.'))
+        layout.addWidget(label(tr('Dispositivos, clusters e geocercas usam o período digitado no fuso de cada recurso. '
+                              'Sessões usam seu próprio intervalo. Cada consulta cria uma camada.')))
         records = QListWidget()
         for record in self._cache.get(self._scope,[]):
             item = QListWidgetItem(record['name'])
@@ -769,6 +815,8 @@ class J3MDialog(QDockWidget):
             records.addItem(item)
         layout.addWidget(records)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr('Adicionar coletas ao mapa'))
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText(tr('Cancelar'))
         buttons.accepted.connect(dialog.accept)
         buttons.rejected.connect(dialog.reject)
         layout.addWidget(buttons)
@@ -783,36 +831,36 @@ class J3MDialog(QDockWidget):
             return
         record = self._batch.pop(0)
         if self._scope in ('devices','clusters') and not QTimeZone(str(record.get('timezone','')).encode('utf-8')).isValid():
-            self._error('O registro '+record['name']+' não possui fuso válido. Lote interrompido.')
+            self._error(tr('O registro ')+record['name']+tr(' não possui fuso válido. Lote interrompido.'))
             return
         if self._scope != 'sessions' and self.end.dateTime()<=self.start.dateTime():
-            self._error('Informe fim posterior ao início.')
+            self._error(tr('Informe fim posterior ao início.'))
             return
         period = None if self._scope=='sessions' else tuple(edit.dateTime().toString('yyyy-MM-dd HH:mm:ss') for edit in (self.start,self.end))
         self._pending_query = (self._scope,dict(record),period)
-        self.statusLabel.setText('Carregando '+record['name']+'; '+str(len(self._batch))+' restantes.')
+        self.statusLabel.setText(tr('Carregando ')+record['name']+'; '+str(len(self._batch))+tr(' restantes.'))
         self.api.get('collections',record['uuid'],scope=self._scope,period=period)
 
     def _replace(self):
         layer = self.workbench.current_layer()
         if not layer or self._busy:
-            self._error('Escolha uma camada em Análise → Camadas e estudos.')
+            self._error(tr('Escolha uma camada em Análise → Camadas e estudos.'))
             return
         if layer.isEditable():
-            self._error('Encerre a edição da camada antes de atualizar o snapshot.')
+            self._error(tr('Encerre a edição da camada antes de atualizar o snapshot.'))
             return
         try:
             origin = json.loads(layer.customProperty('j3m/origin','{}'))
             scope = origin['scope']
             if scope not in TITLES or not origin.get('uuid'):
-                raise ValueError('Esta camada não possui consulta de integração registrada. Recarregue pela origem correspondente.')
+                raise ValueError(tr('Esta camada não possui consulta de integração registrada. Recarregue pela origem correspondente.'))
             record = next((r for r in self._cache.get(scope,[]) if r['uuid']==origin['uuid']),None)
             if not record:
-                raise ValueError('Atualize o catálogo original antes de atualizar esta camada.')
+                raise ValueError(tr('Atualize o catálogo original antes de atualizar esta camada.'))
             self._replace_id = layer.id()
             period = None if scope=='sessions' else origin['period']
             self._pending_query = (scope,record,period)
-            self.workbench.message.setText('Atualizando o snapshot pela consulta original…')
+            self.workbench.message.setText(tr('Atualizando o snapshot pela consulta original…'))
             self.api.get('collections',record['uuid'],scope=scope,period=period)
         except (ValueError,KeyError,TypeError) as error:
             self._error(str(error))
@@ -823,31 +871,34 @@ class J3MDialog(QDockWidget):
         self._changes = []
         if data is None:
             self.reportTable.setRowCount(0)
-            self.reportText.setPlainText('Nenhum dado disponível neste relatório.')
+            self.reportText.setPlainText(tr('Nenhum dado disponível neste relatório.'))
             return
         if kind in ('range','aggregation') and (not isinstance(data,list) or any(not isinstance(v,dict) for v in data)):
-            raise ValueError('Formato de relatório inválido: esperada uma lista.')
+            raise ValueError(tr('Formato de relatório inválido: esperada uma lista.'))
         if kind in ('changes','change_detail') and not isinstance(data,dict):
-            raise ValueError('Formato de relatório inválido: esperado um objeto.')
+            raise ValueError(tr('Formato de relatório inválido: esperado um objeto.'))
         if kind == 'range':
-            headers = ['Métrica','Mínimo','Máximo','Instante mínimo','Instante máximo']
-            rows = [[v.get(k,'—') for k in ('metric','min','max','minDate','maxDate')] for v in data]
+            headers = [tr('Métrica'),tr('Mínimo'),tr('Máximo'),tr('Instante mínimo'),tr('Instante máximo')]
+            rows = [[tr(LABELS.get(str(v.get('metric','—')), str(v.get('metric','—'))))] +
+                    [v.get(k,'—') for k in ('min','max','minDate','maxDate')] for v in data]
         elif kind == 'aggregation':
-            headers = ['Condição','Registros']
+            headers = [tr('Condição'),tr('Registros')]
             rows = [[v.get('id',v.get('_id','—')),v.get('count','—')] for v in data]
         elif kind == 'changes':
-            headers = ['Métrica','Direção','Antes','Depois','Delta','Início UTC','Fim UTC']
+            headers = [tr('Métrica'),tr('Direção'),tr('Antes'),tr('Depois'),tr('Delta'),tr('Início UTC'),tr('Fim UTC')]
             self._changes = data.get('changes',[])
-            rows = [[v.get(k,'—') for k in ('metric','direction','before','after','delta','startedAt','endedAt')] for v in self._changes]
+            rows = [[tr(LABELS.get(str(v.get('metric','—')), str(v.get('metric','—')))),
+                     value_label('direction', v.get('direction','—'))] +
+                    [v.get(k,'—') for k in ('before','after','delta','startedAt','endedAt')] for v in self._changes]
         else:
-            headers = ['Instante UTC','Valor']
+            headers = [tr('Instante UTC'),tr('Valor')]
             rows = [[v.get('timestamp'),v.get('value')] for v in data.get('series',[])]
         self.reportTable.setColumnCount(len(headers))
         self.reportTable.setHorizontalHeaderLabels(headers)
         fill(self.reportTable,rows)
-        self.reportText.setPlainText(('Duplo clique em uma mudança para consultar o detalhe.\n' if kind=='changes' else '')+
+        self.reportText.setPlainText((tr('Duplo clique em uma mudança para consultar o detalhe.\n') if kind=='changes' else '')+
             json.dumps(data if kind=='change_detail' else {'relatorio':kind,'linhas':len(rows)},ensure_ascii=False,indent=2))
-        self.statusLabel.setText('Relatório complementar recebido.')
+        self.statusLabel.setText(tr('Relatório complementar recebido.'))
 
     def _change_detail(self, item):
         if self._busy or not 0<=item.row()<len(getattr(self,'_changes',[])):
@@ -859,7 +910,7 @@ class J3MDialog(QDockWidget):
         for key,source in (('start_date','startedAt'),('end_date','endedAt')):
             dt = QDateTime.fromString(change[source],Qt.DateFormat.ISODate).toTimeZone(zone)
             if not dt.isValid():
-                self._error('O evento possui um instante inválido.')
+                self._error(tr('O evento possui um instante inválido.'))
                 return
             params[key] = dt.toString('yyyy-MM-dd HH:mm:ss')
         self.api.get('change_detail',record['uuid'],scope='sessions',params=params)

@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Portable HTML map tips built from the actual OGR fields."""
+from .i18n import tr
+from .i18n import language
 
 from html import escape
 import re
@@ -51,7 +53,12 @@ def _number(field):
     if field.startswith("firmware_") or field.endswith(("_id", "_uuid")):
         return _text(field)
     return ("CASE WHEN regexp_match({0}, '^[+-]?[0-9]+([.][0-9]+)?([eE][+-]?[0-9]+)?$') "
-            "THEN format_number(to_real({0}), 2, 'pt_BR', true) ELSE {1} END").format(value, _text(field))
+            "THEN {2} ELSE {1} END").format(value, _text(field), _format_number('to_real({})'.format(value), 2))
+
+
+def _format_number(expression, precision):
+    return 'format_number({}, {}, {}, true)'.format(
+        expression, precision, _literal(language().replace('-', '_')))
 
 
 def _measurement(field, fields, compact=False):
@@ -95,9 +102,9 @@ def _radius(fields):
     for field in reversed(candidates):
         value = "trim(to_string({}))".format(_value(field))
         number = ("CASE WHEN regexp_match({0}, '^[+-]?[0-9]+([.][0-9]+)?$') "
-                  "THEN format_number(to_real({0}), 0, 'pt_BR', true) ELSE {1} END").format(value, _text(field))
-        result = "CASE WHEN {} THEN '<div class=\"radius\">Raio de ' || {} || ' m</div>' ELSE {} END".format(
-            _present(field), number, result)
+                  "THEN {2} ELSE {1} END").format(value, _text(field), _format_number('to_real({})'.format(value), 0))
+        result = "CASE WHEN {} THEN {} || {} || ' m</div>' ELSE {} END".format(
+            _present(field), _literal('<div class="radius">' + tr('Raio de ')), number, result)
     return result
 
 
@@ -106,11 +113,12 @@ def _text(field):
     for source, target in (("&", "&amp;"), ("<", "&lt;"), (">", "&gt;"), ('"', "&quot;"), ("'", "&#39;")):
         value = "replace({}, {}, {})".format(value, _literal(source), _literal(target))
     if field == "timePeriod":
-        value = "CASE WHEN lower(trim(to_string({0}))) = 'day' THEN 'Dia' WHEN lower(trim(to_string({0}))) = 'night' THEN 'Noite' ELSE {1} END".format(_value(field), value)
+        value = "CASE WHEN lower(trim(to_string({0}))) = 'day' THEN {2} WHEN lower(trim(to_string({0}))) = 'night' THEN {3} ELSE {1} END".format(
+            _value(field), value, _literal(tr('Dia')), _literal(tr('Noite')))
     translations = {
         "network_type": {"lte": "4G", "wifi": "Wi-Fi"},
-        "device_status": {"online": "Online", "offline": "Offline"},
-        "mode": {"online": "Online", "offline": "Offline"},
+        "device_status": {"online": tr("Online"), "offline": tr("Offline")},
+        "mode": {"online": tr("Online"), "offline": tr("Offline")},
     }
     for source, label in translations.get(field, {}).items():
         value = "CASE WHEN lower(trim(to_string({}))) = {} THEN {} ELSE {} END".format(
@@ -125,11 +133,11 @@ def _territory_key(field):
     key = key[4:] if key.startswith("has_") else key
     # Unit suffixes describe the value, not the territorial metric's name.
     key = re.sub(r"_(?:distance_)?(?:meters?|metres?|m)$", "", key)
-    return TERRITORY_LABELS.get(key, LABELS.get(key, key)).lower()
+    return tr(TERRITORY_LABELS.get(key, LABELS.get(key, key))).lower()
 
 
 def _territory_item(key, candidates, fields):
-    label = LABELS.get(key, key.replace("_", " "))
+    label = tr(LABELS.get(key, key.replace("_", " ")))
     label = escape(label[:1].upper() + label[1:])
     result = "''"
     # Only distance-bearing items belong in this section, never presence flags.
@@ -139,7 +147,7 @@ def _territory_item(key, candidates, fields):
         number = "try(to_real({}), NULL)".format(_value(field))
         result = "CASE WHEN {} AND {} >= 0 THEN {} || {} || ' m</div>' ELSE {} END".format(
             _present(field), number, _literal('<div class="row">' + label + ' · '),
-            "format_number({}, 2, 'pt_BR', true)".format(number), result)
+            _format_number(number, 2), result)
     return result
 
 
@@ -148,13 +156,16 @@ def _badge(field, fields):
     color = "'version'"
     if field == "timePeriod":
         period = "lower(trim(to_string({})))".format(_value(field))
-        return ("CASE WHEN {0} = 'day' THEN '<span class=\"badge day\">☀ Dia</span>' "
-                "WHEN {0} = 'night' THEN '<span class=\"badge night\">☾ Noite</span>' "
-                "ELSE '<span class=\"badge version\">' || {1} || '</span>' END").format(period, _text(field))
+        return ("CASE WHEN {0} = 'day' THEN {2} "
+                "WHEN {0} = 'night' THEN {3} "
+                "ELSE '<span class=\"badge version\">' || {1} || '</span>' END").format(
+                    period, _text(field),
+                    _literal('<span class="badge day">☀ ' + tr('Dia') + '</span>'),
+                    _literal('<span class="badge night">☾ ' + tr('Noite') + '</span>'))
     if field == "device_battery":
         # The API may supply either a number or an already suffixed percentage.
         number = "try(to_real(regexp_replace(trim(to_string({})), '[% ]+$', '')), NULL)".format(_value(field))
-        content = "CASE WHEN {0} IS NOT NULL THEN format_number({0}, 2, 'pt_BR', true) || '%' ELSE {1} END".format(number, _text(field))
+        content = "CASE WHEN {0} IS NOT NULL THEN {2} || '%' ELSE {1} END".format(number, _text(field), _format_number(number, 2))
         color = ("CASE WHEN {0} >= 75 AND {0} <= 100 THEN 'green' "
                  "WHEN {0} >= 50 AND {0} < 75 THEN 'yellow' "
                  "WHEN {0} >= 25 AND {0} < 50 THEN 'orange' "
@@ -179,7 +190,7 @@ def _combined_row(label, candidates, fields, separator=" · "):
             prefix = "CASE WHEN {} THEN {} ELSE '' END".format(
                 " OR ".join(_present(previous) for previous in available[:index]), _literal(separator))
         pieces.append("CASE WHEN {} THEN {} || {} ELSE '' END".format(
-            _present(field), prefix, ("'sinal ' || " if field == "network_signal" else "") + _measurement(field, fields)))
+            _present(field), prefix, (_literal(tr('sinal ')) + ' || ' if field == "network_signal" else "") + _measurement(field, fields)))
     return "CASE WHEN {} THEN {} || {} || '</b></div>' ELSE '' END".format(
         " OR ".join(_present(field) for field in available),
         _literal('<div class="row"><span>' + escape(label) + '</span><b>'), " || ".join(pieces))
@@ -198,7 +209,7 @@ def _section(title, fields, cards=False, all_fields=()):
     fields = sorted(fields, key=rank)
     items = []
     combined = set()
-    if title == "Contexto territorial":
+    if title == tr("Contexto territorial"):
         for field, label in fields:
             if _is_radius(field):
                 continue
@@ -210,10 +221,10 @@ def _section(title, fields, cards=False, all_fields=()):
             combined.update(candidates)
         items.append(_radius(all_fields))
         combined.update(field for field in all_fields if _is_radius(field))
-    if title == "Posição e operação":
+    if title == tr("Posição e operação"):
         for label, candidates, separator in (
-            ("Velocidade", ("geolocation_velocidade",), " · "),
-            ("Rede", ("network_type", "network_signal"), " · "),
+            (tr("Velocidade"), ("geolocation_velocidade",), " · "),
+            (tr("Rede"), ("network_type", "network_signal"), " · "),
         ):
             items.append(_combined_row(label, candidates, all_fields, separator))
             combined.update(candidates)
@@ -230,8 +241,8 @@ def _section(title, fields, cards=False, all_fields=()):
                 _present(field), _literal('<div class="row"><span>' + label + '</span><b>'),
                 _badge(field, all_fields) if field in ("device_battery", "firmware_version", "timePeriod") else _measurement(field, all_fields), _literal('</b></div>')))
     return "CASE WHEN {} THEN {} || {} || {} ELSE '' END".format(
-        "({}) <> ''".format(" || ".join(items)) if title == "Contexto territorial" else " OR ".join(_present(f) for f, _ in fields),
-        _literal('<div class="section ' + ('territory' if title == "Contexto territorial" else 'readings' if cards else 'operation') + '"><h4>' + escape(title) + '</h4><div class="items">'),
+        "({}) <> ''".format(" || ".join(items)) if title == tr("Contexto territorial") else " OR ".join(_present(f) for f, _ in fields),
+        _literal('<div class="section ' + ('territory' if title == tr("Contexto territorial") else 'readings' if cards else 'operation') + '"><h4>' + escape(title) + '</h4><div class="items">'),
         " || ".join(items), _literal('</div></div>'),
     )
 
@@ -279,7 +290,8 @@ def configure_map_tip(layer):
             " OR ".join(_present(field) for field in coordinates), " || ".join(values)))
     if summary:
         parts.append("'<div class=\"summary\">' || " + " || ".join(summary) + " || '</div>'")
-    groups = {"Leituras ambientais": [], "Posição e operação": [], "Contexto territorial": [], "Outros dados": []}
+    groups = {title: [] for title in (
+        tr("Leituras ambientais"), tr("Posição e operação"), tr("Contexto territorial"), tr("Outros dados"))}
     excluded = {"device_name", "device_type", "condition_name", "condition_hex", "condition_color",
                 "condition_font", "condition_icon", "markerColor", "marker-color", "device_status", "collectedAt",
                 "use_queue", "has_geolocation", "is_working", "device_id", "device_geolocation", "condition_id", "condition_uuid", "geolocation_status",
@@ -293,19 +305,19 @@ def configure_map_tip(layer):
             if base in fields or base + "_value" in fields:
                 continue
         if field.startswith("collects_"):
-            group, label = "Leituras ambientais", field[len("collects_"):]
+            group, label = tr("Leituras ambientais"), field[len("collects_"):]
             if label.endswith("_value"):
                 label = label[:-6]
         elif field.startswith(("territorialContext_", "territorialContextDistance_")) or _is_radius(field):
-            group, label = "Contexto territorial", field.split("_", 1)[1] if not _is_radius(field) else "radius_meters"
+            group, label = tr("Contexto territorial"), field.split("_", 1)[1] if not _is_radius(field) else "radius_meters"
         elif field.startswith(("device_", "geolocation_", "network_", "firmware_")) or field in ("collectedAt", "mode", "timePeriod"):
-            group, label = "Posição e operação", field
+            group, label = tr("Posição e operação"), field
         else:
-            group, label = "Outros dados", field
-        label = LABELS.get(label, label.replace("_", " "))
+            group, label = tr("Outros dados"), field
+        label = tr(LABELS.get(label, label.replace("_", " ")))
         groups[group].append((field, label[:1].upper() + label[1:]))
     for title, entries in groups.items():
-        parts.append(_section(title, entries, title == "Leituras ambientais", fields))
+        parts.append(_section(title, entries, title == tr("Leituras ambientais"), fields))
     css = """<style>
     body{margin:0;padding:0}
     .card{box-sizing:border-box;width:350px;max-width:100%;height:auto;background:#fafcfd;border:1px solid #d6e4e8;border-radius:10px;overflow:auto;font-family:'Segoe UI',Arial,sans-serif;color:#164761;font-size:14px;line-height:1.25;text-align:left;white-space:normal;word-wrap:break-word;overflow-wrap:anywhere}

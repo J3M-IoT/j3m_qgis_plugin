@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Map-oriented workbench using existing, downloaded J3M observations."""
+from .i18n import tr
+from .i18n import value_label
 import json
 from pathlib import Path
 from qgis.PyQt.QtCore import Qt, pyqtSignal
@@ -58,21 +60,21 @@ class Workbench(QWidget):
         self._render_jobs = []
         self._analysis_task = None
         layout = QVBoxLayout(self)
-        layout.addWidget(text('Camadas do projeto • disponíveis também offline'))
+        layout.addWidget(text(tr('Camadas do projeto • disponíveis também offline')))
         row = QHBoxLayout()
         self.layers = QComboBox()
         self.layers.setMinimumContentsLength(15)
         self.layers.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         row.addWidget(self.layers, 1)
-        refresh = QPushButton('Atualizar lista')
+        refresh = QPushButton(tr('Atualizar lista'))
         refresh.clicked.connect(self.refresh)
         row.addWidget(refresh)
         layout.addLayout(row)
         actions = QHBoxLayout()
-        adopt = QPushButton('Analisar camada ativa')
+        adopt = QPushButton(tr('Analisar camada ativa'))
         adopt.clicked.connect(self.adopt_active)
         actions.addWidget(adopt)
-        update = QPushButton('Atualizar snapshot')
+        update = QPushButton(tr('Atualizar snapshot'))
         update.clicked.connect(lambda checked=False:self.snapshotRefreshRequested.emit())
         actions.addWidget(update)
         layout.addLayout(actions)
@@ -83,9 +85,9 @@ class Workbench(QWidget):
         visual = QWidget()
         form = QFormLayout(visual)
         self.metric = QComboBox()
-        self.metric.setAccessibleName('Métrica do mapa e dos gráficos')
-        form.addRow('Variável', self.metric)
-        self.fixed = QCheckBox('Fixar escala para comparar campanhas')
+        self.metric.setAccessibleName(tr('Métrica do mapa e dos gráficos'))
+        form.addRow(tr('Variável'), self.metric)
+        self.fixed = QCheckBox(tr('Fixar escala para comparar campanhas'))
         form.addRow(self.fixed)
         limits = QHBoxLayout()
         self.minimum, self.maximum = QDoubleSpinBox(), QDoubleSpinBox()
@@ -93,85 +95,85 @@ class Workbench(QWidget):
             spin.setRange(-1e12, 1e12)
             spin.setDecimals(4)
             limits.addWidget(spin)
-        self.minimum.setAccessibleName('Mínimo da escala')
-        self.maximum.setAccessibleName('Máximo da escala')
-        form.addRow('Mínimo / máximo', limits)
+        self.minimum.setAccessibleName(tr('Mínimo da escala'))
+        self.maximum.setAccessibleName(tr('Máximo da escala'))
+        form.addRow(tr('Mínimo / máximo'), limits)
         self.size = QDoubleSpinBox()
         self.size.setRange(.5, 12)
         self.size.setValue(3)
         self.size.setSuffix(' mm')
-        form.addRow('Tamanho do ponto', self.size)
-        apply = QPushButton('Aplicar ao mapa')
+        form.addRow(tr('Tamanho do ponto'), self.size)
+        apply = QPushButton(tr('Aplicar ao mapa'))
         apply.clicked.connect(self.apply_style)
         form.addRow(apply)
-        zoom = QPushButton('Aproximar à camada')
+        zoom = QPushButton(tr('Aproximar à camada'))
         zoom.clicked.connect(self.zoom)
         form.addRow(zoom)
-        self.legend = text('Condição J3M: cor original da API. Escolha uma variável para uma escala numérica.')
+        self.legend = text(tr('Condição J3M: cor original da API. Escolha uma variável para uma escala numérica.'))
         form.addRow(self.legend)
-        form.addRow(text('A camada já está preparada para o Controlador Temporal do QGIS. '
-                         'Pontos são observações instantâneas; não são uma superfície interpolada.'))
-        self.tabs.addTab(visual, 'Mapa')
+        form.addRow(text(tr('A camada já está preparada para o Controlador Temporal do QGIS. '
+                         'Pontos são observações instantâneas; não são uma superfície interpolada.')))
+        self.tabs.addTab(visual, tr('Mapa'))
 
         temporal = QWidget()
         time_layout = QVBoxLayout(temporal)
         self.chart = SeriesChart()
         self.chart.observationSelected.connect(self.select_observation)
         time_layout.addWidget(self.chart, 1)
-        time_layout.addWidget(text('UTC • séries separadas por dispositivo. Quebras acima de 3× o intervalo mediano. '
-                                  'Clique no gráfico ou selecione uma linha abaixo para destacar no mapa.'))
-        self.observations = grid(['Instante UTC', 'Dispositivo', 'Valor'])
+        time_layout.addWidget(text(tr('UTC • séries separadas por dispositivo. Quebras acima de 3× o intervalo mediano. '
+                                  'Clique no gráfico ou selecione uma linha abaixo para destacar no mapa.')))
+        self.observations = grid([tr('Instante UTC'), tr('Dispositivo'), tr('Valor')])
         self.observations.setMaximumHeight(210)
         self.observations.itemSelectionChanged.connect(self._observation_row)
         time_layout.addWidget(self.observations)
-        self.tabs.addTab(temporal, 'Série')
+        self.tabs.addTab(temporal, tr('Série'))
 
         stats = QWidget()
         sl = QVBoxLayout(stats)
-        self.statistics = grid(['Métrica', 'Unidade', 'n válido', 'Mín.', 'Média', 'Mediana', 'Máx.', 'Desvio'])
+        self.statistics = grid([tr('Métrica'), tr('Unidade'), tr('n válido'), tr('Mín.'), tr('Média'), tr('Mediana'), tr('Máx.'), tr('Desvio')])
         sl.addWidget(self.statistics)
         self.quality = text()
         sl.addWidget(self.quality)
-        sl.addWidget(text('Resumo local de registros baixados. Não é média ponderada por tempo ou sensor. '
-                         'Amostras sem GPS excluídas pelo servidor não podem ser auditadas nesta camada.'))
-        self.tabs.addTab(stats, 'Qualidade')
+        sl.addWidget(text(tr('Resumo local de registros baixados. Não é média ponderada por tempo ou sensor. '
+                         'Amostras sem GPS excluídas pelo servidor não podem ser auditadas nesta camada.')))
+        self.tabs.addTab(stats, tr('Qualidade'))
 
         distributions = QWidget()
         dl = QVBoxLayout(distributions)
         self.category = QComboBox()
-        for caption, key in [('Condição', 'condition'), ('Dia/noite', 'timePeriod'), ('Modo', 'mode'), ('Dispositivo', 'device')]:
+        for caption, key in [(tr('Condição'), 'condition'), (tr('Dia/noite'), 'timePeriod'), (tr('Modo'), 'mode'), (tr('Dispositivo'), 'device')]:
             self.category.addItem(caption, key)
         dl.addWidget(self.category)
-        self.distribution = grid(['Categoria', 'Registros', '% de registros'])
+        self.distribution = grid([tr('Categoria'), tr('Registros'), tr('% de registros')])
         dl.addWidget(self.distribution)
-        dl.addWidget(text('Percentuais por registro; não representam tempo de exposição.'))
+        dl.addWidget(text(tr('Percentuais por registro; não representam tempo de exposição.')))
         self.category.currentIndexChanged.connect(self._distribution)
-        self.tabs.addTab(distributions, 'Distribuição')
+        self.tabs.addTab(distributions, tr('Distribuição'))
 
         comparison = QWidget()
         cl = QVBoxLayout(comparison)
-        cl.addWidget(text('A = camada acima. B = camada abaixo. Comparação descritiva, sem pareamento temporal/espacial.'))
+        cl.addWidget(text(tr('A = camada acima. B = camada abaixo. Comparação descritiva, sem pareamento temporal/espacial.')))
         self.other = QComboBox()
         cl.addWidget(self.other)
-        compare = QPushButton('Comparar A e B')
+        compare = QPushButton(tr('Comparar A e B'))
         compare.clicked.connect(self.compare)
         cl.addWidget(compare)
-        self.comparison = grid(['Métrica / unidade', 'n A', 'Média A', 'n B', 'Média B', 'B − A'])
+        self.comparison = grid([tr('Métrica / unidade'), 'n A', tr('Média A'), 'n B', tr('Média B'), 'B − A'])
         cl.addWidget(self.comparison)
         self.comparisonInfo = text()
         cl.addWidget(self.comparisonInfo)
-        self.tabs.addTab(comparison, 'Comparar')
+        self.tabs.addTab(comparison, tr('Comparar'))
 
         inspection = QWidget()
         il = QVBoxLayout(inspection)
-        il.addWidget(text('Selecione um ponto no QGIS ou no gráfico. Os dados originais permanecem na camada.'))
+        il.addWidget(text(tr('Selecione um ponto no QGIS ou no gráfico. Os dados originais permanecem na camada.')))
         self.inspector = QPlainTextEdit()
         self.inspector.setReadOnly(True)
         il.addWidget(self.inspector)
-        copy = QPushButton('Copiar informação selecionada')
+        copy = QPushButton(tr('Copiar informação selecionada'))
         copy.clicked.connect(lambda: self.inspector.selectAll() or self.inspector.copy())
         il.addWidget(copy)
-        self.tabs.addTab(inspection, 'Inspecionar')
+        self.tabs.addTab(inspection, tr('Inspecionar'))
 
         output = QWidget()
         ol = QVBoxLayout(output)
@@ -179,18 +181,18 @@ class Workbench(QWidget):
         self.origin.setReadOnly(True)
         self.origin.setMaximumHeight(180)
         ol.addWidget(self.origin)
-        for caption, driver in [('Exportar GeoPackage', 'GPKG'), ('Exportar CSV', 'CSV'), ('Exportar GeoJSON', 'GeoJSON'), ('Exportar KML', 'KML')]:
+        for caption, driver in [(tr('Exportar GeoPackage'), 'GPKG'), (tr('Exportar CSV'), 'CSV'), (tr('Exportar GeoJSON'), 'GeoJSON'), (tr('Exportar KML'), 'KML')]:
             button = QPushButton(caption)
             button.clicked.connect(lambda checked=False, d=driver: self.export(d))
             ol.addWidget(button)
-        bundle = QPushButton('Salvar estudo portátil\nQGIS + GeoPackage + estilo')
+        bundle = QPushButton(tr('Salvar estudo portátil\nQGIS + GeoPackage + estilo'))
         bundle.clicked.connect(self.bundle)
         ol.addWidget(bundle)
-        pdf = QPushButton('Gerar PDF da camada')
+        pdf = QPushButton(tr('Gerar PDF da camada'))
         pdf.clicked.connect(self.pdf)
         ol.addWidget(pdf)
-        self.tabs.addTab(output, 'Exportar')
-        self.message = text('Adicione coletas para analisar.')
+        self.tabs.addTab(output, tr('Exportar'))
+        self.message = text(tr('Adicione coletas para analisar.'))
         layout.addWidget(self.message)
         self.layers.currentIndexChanged.connect(self._load)
         self.metric.currentIndexChanged.connect(self._metric_changed)
@@ -207,12 +209,12 @@ class Workbench(QWidget):
         layer = self.iface.activeLayer()
         if not isinstance(layer,QgsVectorLayer) or layer.fields().indexFromName('collectedAt') < 0 or not any(
                 field.name().startswith('collects_') for field in layer.fields()):
-            self.message.setText('Selecione uma camada J3M com collectedAt e campos collects_ no QGIS.')
+            self.message.setText(tr('Selecione uma camada J3M com collectedAt e campos collects_ no QGIS.'))
             return
         if not layer.customProperty('j3m/origin',''):
             from .cartography import configure_layer
             configure_layer(layer,{'scope':'local','name':layer.name(),
-                'note':'Camada preexistente. Consulta, período e hash de download não registrados; não é possível atualizar automaticamente.'},preserve_style=True)
+                'note':tr('Camada preexistente. Consulta, período e hash de download não registrados; não é possível atualizar automaticamente.')},preserve_style=True)
         self.focus_layer(layer)
 
     def refresh(self, *args):
@@ -280,18 +282,18 @@ class Workbench(QWidget):
             if self._disposed or generation != self._generation:
                 return
             if error:
-                self.message.setText('Falha na análise local: '+str(error))
+                self.message.setText(tr('Falha na análise local: ')+str(error))
             elif result is not None:
                 callback(result)
             else:
-                self.message.setText('Análise cancelada. Atualize a lista para tentar novamente.')
-        task = QgsTask.fromFunction('J3M: analisar observações', run, on_finished=finished)
+                self.message.setText(tr('Análise cancelada. Atualize a lista para tentar novamente.'))
+        task = QgsTask.fromFunction(tr('J3M: analisar observações'), run, on_finished=finished)
         if self._analysis_task is not None:
             self._analysis_task.cancel()
         self._analysis_task = task
         task.setDependentLayers([layer])
         self._tasks.append(task)
-        self.message.setText('Analisando em segundo plano; cancelamento disponível nas tarefas do QGIS.')
+        self.message.setText(tr('Analisando em segundo plano; cancelamento disponível nas tarefas do QGIS.'))
         QgsApplication.taskManager().addTask(task)
 
     def _load(self, prepared=None):
@@ -303,7 +305,7 @@ class Workbench(QWidget):
         self.metric.blockSignals(True)
         previous = self.metric.currentData()
         self.metric.clear()
-        self.metric.addItem('Condição J3M (original)', '')
+        self.metric.addItem(tr('Condição J3M (original)'), '')
         self.inspector.clear()
         self.origin.clear()
         self.quality.clear()
@@ -325,21 +327,21 @@ class Workbench(QWidget):
                     self.summary = summarize(self.payload)
                 self.units = json.loads(layer.customProperty('j3m/units', '{}'))
                 for metric in self.summary['stats']:
-                    self.metric.addItem(LABELS.get(metric, metric) + ' ' + self.unit(metric), metric)
+                    self.metric.addItem(tr(LABELS.get(metric, metric)) + ' ' + self.unit(metric), metric)
                 self.origin.setPlainText(str(layer.customProperty('j3m/origin', '{}')))
                 origin = json.loads(layer.customProperty('j3m/origin', '{}'))
-                self.quality.setText('{count} registros · {invalid_geometry} geometrias não pontuais/inválidas · '
-                    '{invalid_time} datas sem fuso/inválidas · {duplicates} IDs repetidos · {missing_ids} sem ID.'.format(**self.summary))
+                self.quality.setText(tr('{count} registros · {invalid_geometry} geometrias não pontuais/inválidas · '
+                    '{invalid_time} datas sem fuso/inválidas · {duplicates} IDs repetidos · {missing_ids} sem ID.').format(**self.summary))
                 if origin.get('api_total') is not None:
-                    self.quality.setText(self.quality.text()+'\nTotal consultado nos indicadores da API: '+str(origin['api_total'])+
-                        '. As bases podem diferir por GPS, bordas temporais ou atualização da origem.')
-                fill(self.statistics, [[LABELS.get(k,k),self.unit(k),s['n'],display(s['min']),display(s['mean']),
+                    self.quality.setText(self.quality.text()+tr('\nTotal consultado nos indicadores da API: ')+str(origin['api_total'])+
+                        tr('. As bases podem diferir por GPS, bordas temporais ou atualização da origem.'))
+                fill(self.statistics, [[tr(LABELS.get(k,k)),self.unit(k),s['n'],display(s['min']),display(s['mean']),
                     display(s['median']),display(s['max']),display(s['std'])] for k,s in self.summary['stats'].items()])
                 layer.selectionChanged.connect(self._inspect)
                 self._connected_layer = layer
-                self.message.setText('Snapshot local; atualize pela consulta original quando necessário.')
+                self.message.setText(tr('Snapshot local; atualize pela consulta original quando necessário.'))
             except (ValueError, TypeError, RuntimeError) as error:
-                self.message.setText('Não foi possível analisar a camada: '+str(error))
+                self.message.setText(tr('Não foi possível analisar a camada: ')+str(error))
         index = self.metric.findData(previous)
         if index >= 0:
             self.metric.setCurrentIndex(index)
@@ -351,19 +353,19 @@ class Workbench(QWidget):
     def unit(self, metric):
         supplied = (self.summary or {}).get('units', {}).get(metric, set())
         if len(supplied) > 1:
-            return 'Unidades conflitantes'
+            return tr('Unidades conflitantes')
         return next(iter(supplied)) if supplied else self.units.get(metric, UNITS.get(metric, ''))
 
     def _metric_changed(self):
         metric = self.metric.currentData()
         points = (self.summary or {}).get('series', {}).get(metric, [])
-        self.chart.set_series(points, (LABELS.get(metric,metric or '')+' '+self.unit(metric)) if metric and self.summary else '',
+        self.chart.set_series(points, (tr(LABELS.get(metric,metric or ''))+' '+self.unit(metric)) if metric and self.summary else '',
                               (self.summary or {}).get('plots',{}).get(metric))
         from datetime import datetime, timezone
         self._series_rows = points[:2000]
         fill(self.observations, [[datetime.fromtimestamp(p[0],timezone.utc).strftime('%d/%m/%Y %H:%M:%S'),p[3],display(p[1])]
                                 for p in self._series_rows])
-        self.observations.setToolTip('Tabela: até 2.000 observações. Exportações e estatísticas incluem todas.')
+        self.observations.setToolTip(tr('Tabela: até 2.000 observações. Exportações e estatísticas incluem todas.'))
         if metric and self.summary and not self.fixed.isChecked():
             s = self.summary['stats'][metric]
             self.minimum.setValue(s['min'] or 0)
@@ -372,13 +374,14 @@ class Workbench(QWidget):
     def _distribution(self):
         counts = (self.summary or {}).get('distributions', {}).get(self.category.currentData(), {})
         total = sum(counts.values()) or 1
-        fill(self.distribution, [[key,n,display(n*100/total)] for key,n in sorted(counts.items())])
+        field = self.category.currentData()
+        fill(self.distribution, [[value_label(field,key),n,display(n*100/total)] for key,n in sorted(counts.items())])
         for row, (key,n) in enumerate(sorted(counts.items())):
             bar = QProgressBar()
             bar.setRange(0,1000)
             bar.setValue(round(n*1000/total))
             bar.setFormat(display(n*100/total)+' %')
-            bar.setAccessibleName(key+': '+str(n)+' registros')
+            bar.setAccessibleName(value_label(field,key)+': '+str(n)+tr(' registros'))
             self.distribution.setCellWidget(row,2,bar)
 
     def _observation_row(self):
@@ -406,7 +409,7 @@ class Workbench(QWidget):
                       'geometry_wgs84':self.payload['features'][i]['geometry']} for i in indexes[:20]]
         self.inspector.setPlainText(json.dumps(inspected,ensure_ascii=False,indent=2,default=str))
         if len(indexes)>20:
-            self.message.setText('Inspeção limitada aos primeiros 20 pontos selecionados.')
+            self.message.setText(tr('Inspeção limitada aos primeiros 20 pontos selecionados.'))
 
     def apply_style(self):
         layer = self.current_layer()
@@ -414,16 +417,16 @@ class Workbench(QWidget):
             return
         metric = self.metric.currentData()
         try:
-            if metric and self.unit(metric) == 'Unidades conflitantes':
-                raise ValueError('Não é possível aplicar uma escala comum a unidades conflitantes.')
+            if metric and self.unit(metric) == tr('Unidades conflitantes'):
+                raise ValueError(tr('Não é possível aplicar uma escala comum a unidades conflitantes.'))
             style_metric(layer, metric, self.minimum.value() if self.fixed.isChecked() else None,
                          self.maximum.value() if self.fixed.isChecked() else None,
                          self.unit(metric) if metric else '', self.size.value(),
                          stats=self.summary['stats'].get(metric), categories=self.summary['categories'])
             self.iface.layerTreeView().refreshLayerSymbology(layer.id())
-            self.legend.setText('Legenda disponível na árvore de camadas. '+
-                ('Classes de intervalo igual; valores fora da escala e ausentes têm símbolos próprios.' if metric else 'Cores originais da condição J3M.'))
-            self.message.setText('Estilo aplicado e salvo com o projeto.')
+            self.legend.setText(tr('Legenda disponível na árvore de camadas. ')+
+                (tr('Classes de intervalo igual; valores fora da escala e ausentes têm símbolos próprios.') if metric else tr('Cores originais da condição J3M.')))
+            self.message.setText(tr('Estilo aplicado e salvo com o projeto.'))
         except ValueError as error:
             self.message.setText(str(error))
 
@@ -437,7 +440,7 @@ class Workbench(QWidget):
         a = self.current_layer()
         b = QgsProject.instance().mapLayer(self.other.currentData())
         if not a or not b or a.id() == b.id():
-            self.message.setText('Escolha duas camadas diferentes.')
+            self.message.setText(tr('Escolha duas camadas diferentes.'))
             return
         try:
             if not isinstance(other, dict):
@@ -457,13 +460,13 @@ class Workbench(QWidget):
                 right = other['stats'][metric]
                 supplied = other['units'].get(metric, set())
                 unit_b = next(iter(supplied)) if len(supplied)==1 else units.get(metric,UNITS.get(metric,''))
-                compatible = bool(self.unit(metric)) and self.unit(metric)==unit_b and len(supplied)<=1 and self.unit(metric)!='Unidades conflitantes'
+                compatible = bool(self.unit(metric)) and self.unit(metric)==unit_b and len(supplied)<=1 and self.unit(metric)!=tr('Unidades conflitantes')
                 delta = right['mean']-values['mean'] if compatible and values['n'] and right['n'] else None
                 rows.append([metric+' / '+(self.unit(metric) or '?'),values['n'],display(values['mean']),right['n'],
-                             display(right['mean']),display(delta) if compatible else 'Unidades não confirmadas'])
+                             display(right['mean']),display(delta) if compatible else tr('Unidades não confirmadas')])
             fill(self.comparison,rows)
             self.comparisonInfo.setText('A: '+str(a.customProperty('j3m/origin',''))+'\nB: '+str(b.customProperty('j3m/origin',''))+
-                '\nDiferença entre médias dos registros; não é efeito causal ou comparação de amostras pareadas.')
+                tr('\nDiferença entre médias dos registros; não é efeito causal ou comparação de amostras pareadas.'))
         except (ValueError, TypeError) as error:
             self.message.setText(str(error))
 
@@ -472,7 +475,7 @@ class Workbench(QWidget):
         if not layer:
             return
         ext = {'GPKG':'gpkg','CSV':'csv','GeoJSON':'geojson','KML':'kml'}[driver]
-        path, _ = QFileDialog.getSaveFileName(self,'Exportar camada','coletas.'+ext,driver+' (*.'+ext+')')
+        path, _ = QFileDialog.getSaveFileName(self,tr('Exportar camada'),'coletas.'+ext,driver+' (*.'+ext+')')
         if not path:
             return
         if not path.lower().endswith('.'+ext):
@@ -486,7 +489,7 @@ class Workbench(QWidget):
         layer = self.current_layer()
         if not layer:
             return
-        parent = QFileDialog.getExistingDirectory(self,'Pasta para um novo estudo portátil')
+        parent = QFileDialog.getExistingDirectory(self,tr('Pasta para um novo estudo portátil'))
         if not parent:
             return
         from datetime import datetime
@@ -509,26 +512,26 @@ class Workbench(QWidget):
                 return
             current = QgsProject.instance().mapLayer(identifier)
             if current is None:
-                self.message.setText('Arquivo exportado; camada removida antes de salvar estilo/procedência.')
+                self.message.setText(tr('Arquivo exportado; camada removida antes de salvar estilo/procedência.'))
                 return
             try:
                 export_sidecars(current,path)
                 if directory:
                     self._finish_bundle(current,directory)
                 else:
-                    self.message.setText('Exportado com estilo QML e procedência: '+str(path))
+                    self.message.setText(tr('Exportado com estilo QML e procedência: ')+str(path))
             except (ValueError,OSError,RuntimeError) as error:
-                self.message.setText('Exportação incompleta: '+str(error))
+                self.message.setText(tr('Exportação incompleta: ')+str(error))
         def failed(code, message):
             if task in self._tasks:
                 self._tasks.remove(task)
             if not self._disposed:
-                self.message.setText('Exportação cancelada ou incompleta: '+message)
+                self.message.setText(tr('Exportação cancelada ou incompleta: ')+message)
         task.completed.connect(done)
         task.errorOccurred.connect(failed)
         task.setDependentLayers([layer])
         self._tasks.append(task)
-        self.message.setText('Exportando em segundo plano; acompanhe ou cancele nas tarefas do QGIS.')
+        self.message.setText(tr('Exportando em segundo plano; acompanhe ou cancele nas tarefas do QGIS.'))
         QgsApplication.taskManager().addTask(task)
 
     def _finish_bundle(self, layer, directory):
@@ -541,14 +544,14 @@ class Workbench(QWidget):
                 return
             current = QgsProject.instance().mapLayer(identifier)
             if error or not result or task.isCanceled() or current is None:
-                self.message.setText('Estudo portátil incompleto ou cancelado.')
+                self.message.setText(tr('Estudo portátil incompleto ou cancelado.'))
                 return
             try:
                 path = portable_study(current,directory,exported=True,original_copied=True)
-                self.message.setText('Estudo portátil salvo: '+str(path))
+                self.message.setText(tr('Estudo portátil salvo: ')+str(path))
             except (ValueError,OSError,RuntimeError) as caught:
-                self.message.setText('Estudo portátil incompleto: '+str(caught))
-        task = QgsTask.fromFunction('J3M: copiar origem do estudo',copy_original,
+                self.message.setText(tr('Estudo portátil incompleto: ')+str(caught))
+        task = QgsTask.fromFunction(tr('J3M: copiar origem do estudo'),copy_original,
                                     source=source,directory=directory,on_finished=finished)
         self._tasks.append(task)
         QgsApplication.taskManager().addTask(task)
@@ -557,7 +560,7 @@ class Workbench(QWidget):
         layer = self.current_layer()
         if not layer or not self.summary:
             return
-        path, _ = QFileDialog.getSaveFileName(self,'Relatório de campanha','campanha.pdf','PDF (*.pdf)')
+        path, _ = QFileDialog.getSaveFileName(self,tr('Relatório de campanha'),'campanha.pdf','PDF (*.pdf)')
         if not path:
             return
         if not path.lower().endswith('.pdf'):
@@ -567,9 +570,9 @@ class Workbench(QWidget):
                 if job in self._render_jobs:
                     self._render_jobs.remove(job)
                 if not self._disposed:
-                    self.message.setText(str(error) if error else 'PDF salvo: '+path)
+                    self.message.setText(str(error) if error else tr('PDF salvo: ')+path)
             job = report_pdf(layer,path,self.summary,on_finished=done)
             self._render_jobs.append(job)
-            self.message.setText('Preparando o mapa do PDF…')
+            self.message.setText(tr('Preparando o mapa do PDF…'))
         except (ValueError,OSError,RuntimeError) as error:
             self.message.setText(str(error))

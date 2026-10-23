@@ -34,6 +34,8 @@ def main():
             assert archive.read('j3m_connect/'+filename)==(root/'j3m_connect'/filename).read_bytes(),filename
         for filename in ('metadata.txt','config.json','LICENSE','j3m-logo.jpeg'):
             assert archive.read('j3m_connect/'+filename)==(root/'j3m_connect'/filename).read_bytes(),filename
+        for filename in ('i18n/en-us.json', 'i18n/es-es.json'):
+            assert archive.read('j3m_connect/'+filename)==(root/'j3m_connect'/filename).read_bytes(),filename
         for filename in ('README.md','CHANGELOG.md'):
             assert archive.read('j3m_connect/'+filename)==(root/filename).read_bytes(),filename
     print('OK: ZIP, '+str(len(checked))+' Python modules, Python 3.9 syntax, qgis.PyQt imports, GPL v3 and QGIS 3.28-4.99 metadata.')

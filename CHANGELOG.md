@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.1
+
+- Tradução do plugin em português do Brasil (pt-BR), inglês dos Estados Unidos (en-US) e espanhol da Espanha (es-ES), incluindo menus, mensagens, acessibilidade, gráficos, tooltips, aliases, legendas e relatórios gerados.
+- Idioma automático conforme a interface do QGIS, com fallback em inglês e seleção manual persistente no menu próprio Configurações → Idioma, separado de Conexão.
+- Aplicação de outro idioma reinicia o painel e cancela consultas pendentes, preservando as camadas do projeto.
+- Envio do idioma à API pelos cabeçalhos X-Locale e Accept-Language e reconhecimento de respostas vazias traduzidas nos três idiomas.
+- Tradução de métricas e valores conhecidos apenas na apresentação, preservando identificadores, dados originais e o cruzamento entre indicadores e mínimos/máximos.
+- 56 testes aprovados em QGIS 3.44.15 / Qt 5.15.13 / Windows e QGIS 4.2.2 / Qt 6.10.2 / Linux em Docker. API real com credenciais não exercitada.
+
 ## 1.2.0
 
 - Painel acoplável/flutuante, menu recolhível, cartões de métricas e paleta nativa Qt.

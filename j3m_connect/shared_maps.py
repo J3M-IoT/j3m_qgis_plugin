@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Read an existing public map link by code; never forward integration secrets."""
+from .i18n import tr
 from urllib.parse import urlencode
 from qgis.PyQt.QtCore import QUrl
 from qgis.PyQt.QtWidgets import QWidget,QVBoxLayout,QLineEdit,QPushButton
@@ -19,27 +20,27 @@ class SharedMapsPage(QWidget):
         self.layerLoader=LayerLoader(self)
         self.record=None
         layout=QVBoxLayout(self)
-        layout.addWidget(text('Mapas compartilhados J3M'))
-        layout.addWidget(text('Informe o código de um mapa compartilhado já existente. '
-            'A consulta usa a public_api configurada e não envia credenciais de integração.'))
+        layout.addWidget(text(tr('Mapas compartilhados J3M')))
+        layout.addWidget(text(tr('Informe o código de um mapa compartilhado já existente. '
+            'A consulta usa a public_api configurada e não envia credenciais de integração.')))
         self.code=QLineEdit()
-        self.code.setPlaceholderText('Código do mapa (não cole uma URL)')
+        self.code.setPlaceholderText(tr('Código do mapa (não cole uma URL)'))
         layout.addWidget(self.code)
-        self.loadButton=QPushButton('Consultar mapa compartilhado')
+        self.loadButton=QPushButton(tr('Consultar mapa compartilhado'))
         self.loadButton.clicked.connect(self.load)
         layout.addWidget(self.loadButton)
         self.details=text()
         layout.addWidget(self.details)
-        self.addButton=QPushButton('Adicionar coletas compartilhadas')
+        self.addButton=QPushButton(tr('Adicionar coletas compartilhadas'))
         self.addButton.clicked.connect(lambda:self.api.get('link_collections',self.record['uuid'],scope='map_links'))
         layout.addWidget(self.addButton)
-        self.baseButton=QPushButton('Adicionar mapa de fundo cadastrado')
+        self.baseButton=QPushButton(tr('Adicionar mapa de fundo cadastrado'))
         self.baseButton.clicked.connect(self.basemap)
         layout.addWidget(self.baseButton)
-        cancel=QPushButton('Cancelar')
+        cancel=QPushButton(tr('Cancelar'))
         cancel.clicked.connect(self.cancel)
         layout.addWidget(cancel)
-        self.status=text('A disponibilidade e o período são definidos pelo compartilhamento J3M.')
+        self.status=text(tr('A disponibilidade e o período são definidos pelo compartilhamento J3M.'))
         layout.addWidget(self.status)
         layout.addStretch()
         self.api.received.connect(self.received)
@@ -69,7 +70,7 @@ class SharedMapsPage(QWidget):
     def load(self):
         code=self.code.text().strip()
         if not code or any(ch in code for ch in '/\\?#') or code in ('.','..'):
-            self.status.setText('Informe somente o código do mapa compartilhado.')
+            self.status.setText(tr('Informe somente o código do mapa compartilhado.'))
             return
         self.record=None
         self.api.get('map_link',code,scope='map_links')
@@ -79,31 +80,31 @@ class SharedMapsPage(QWidget):
             if kind=='map_link':
                 record=_response_data(payload)
                 if not isinstance(record,dict) or not record.get('uuid'):
-                    raise ValueError('O mapa compartilhado não informa UUID.')
+                    raise ValueError(tr('O mapa compartilhado não informa UUID.'))
                 self.record=record
-                self.details.setText(str(record.get('name','Mapa'))+'\n'+str(record.get('rangeStart','—'))+' a '+
-                    str(record.get('rangeEnd','—'))+'\nFuso: '+str(record.get('timezone','—'))+'\n'+
-                    'Dispositivos: '+', '.join(str(d.get('name','')) for d in record.get('devices',[])))
-                self.status.setText('Mapa compartilhado disponível. Atualização manual.')
+                self.details.setText(str(record.get('name',tr('Mapa')))+'\n'+str(record.get('rangeStart','—'))+tr(' a ')+
+                    str(record.get('rangeEnd','—'))+'\n'+tr('Fuso horário')+': '+str(record.get('timezone','—'))+'\n'+
+                    tr('Dispositivos: ')+', '.join(str(d.get('name','')) for d in record.get('devices',[])))
+                self.status.setText(tr('Mapa compartilhado disponível. Atualização manual.'))
             elif kind=='link_collections' and self.record:
                 if payload is None:
-                    self.status.setText('Não há coletas georreferenciadas disponíveis.')
+                    self.status.setText(tr('Não há coletas georreferenciadas disponíveis.'))
                     return
                 record=self.record
                 def finish(layer, digest):
                     if layer is None:
-                        self.status.setText('Não há coletas georreferenciadas disponíveis.')
+                        self.status.setText(tr('Não há coletas georreferenciadas disponíveis.'))
                         return
                     origin=provenance('map_links',record,[record.get('rangeStart'),record.get('rangeEnd')],digest=digest)
                     origin['endpoint']='/v1/map-links/'+record['uuid']+'/export?format=geojson'
-                    origin['access']='Compartilhamento público, separado da integração'
+                    origin['access']=tr('Compartilhamento público, separado da integração')
                     configure_layer(layer,origin)
                     self.iface.setActiveLayer(layer)
                     self.iface.actionMapTips().setChecked(True)
                     self.workbench.focus_layer(layer)
-                    self.status.setText('Camada compartilhada adicionada; disponível em Análise.')
-                self.status.setText('Preparando a camada compartilhada…')
-                self.layerLoader.load(payload,'J3M • Compartilhado — '+str(record.get('name','Mapa')),finish)
+                    self.status.setText(tr('Camada compartilhada adicionada; disponível em Análise.'))
+                self.status.setText(tr('Preparando a camada compartilhada…'))
+                self.layerLoader.load(payload,tr('J3M • Compartilhado — ')+str(record.get('name',tr('Mapa'))),finish)
         except (ValueError,TypeError,OSError) as error:
             self.status.setText(str(error))
         finally:
@@ -117,18 +118,18 @@ class SharedMapsPage(QWidget):
             raw=raw.replace('{s}',subdomains[0].strip()[0])
         url=QUrl(raw)
         if not url.isValid() or url.scheme()!='https' or not url.host() or url.userInfo():
-            self.status.setText('O fundo cadastrado precisa de URL HTTPS válida e sem credenciais.')
+            self.status.setText(tr('O fundo cadastrado precisa de URL HTTPS válida e sem credenciais.'))
             return
         if not all(token in raw for token in ('{x}','{y}','{z}')):
-            self.status.setText('Este fundo não informa um modelo XYZ compatível ({z}/{x}/{y}).')
+            self.status.setText(tr('Este fundo não informa um modelo XYZ compatível ({z}/{x}/{y}).'))
             return
-        layer=QgsRasterLayer(urlencode({'type':'xyz','url':raw}),str(record.get('name','J3M • Fundo')),'wms')
+        layer=QgsRasterLayer(urlencode({'type':'xyz','url':raw}),str(record.get('name',tr('J3M • Fundo'))),'wms')
         if not layer.isValid():
-            self.status.setText('Não foi possível carregar o fundo cadastrado.')
+            self.status.setText(tr('Não foi possível carregar o fundo cadastrado.'))
             return
         QgsProject.instance().addMapLayer(layer)
         root=QgsProject.instance().layerTreeRoot()
         node=root.findLayer(layer.id())
         root.addChildNode(node.clone())
         root.removeChildNode(node)
-        self.status.setText('Mapa de fundo adicionado com a fonte cadastrada no J3M.')
+        self.status.setText(tr('Mapa de fundo adicionado com a fonte cadastrada no J3M.'))

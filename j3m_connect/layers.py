@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Load direct GeoJSON responses as durable, local OGR vector layers."""
+from .i18n import tr
 
 import json
 import hashlib
@@ -48,11 +49,11 @@ class LayerLoader(QObject):
             self.busyChanged.emit(False)
             if task.isCanceled():
                 discard_prepared(result)
-                self.failed.emit('Preparação da camada cancelada.')
+                self.failed.emit(tr('Preparação da camada cancelada.'))
                 return
             if error:
                 # Validation errors are local messages, never remote JSON bodies.
-                self.failed.emit(str(error) if isinstance(error, ValueError) else 'Não foi possível preparar a camada local.')
+                self.failed.emit(str(error) if isinstance(error, ValueError) else tr('Não foi possível preparar a camada local.'))
                 return
             if result is None:
                 callback(None, None)
@@ -74,9 +75,9 @@ class LayerLoader(QObject):
                     else:
                         sip.delete(layer)
                 path.unlink(missing_ok=True)
-                self.failed.emit('Não foi possível concluir a camada local.')
+                self.failed.emit(tr('Não foi possível concluir a camada local.'))
         task = QgsTask.fromFunction(
-            'J3M: preparar camada', _prepare_layer, payload=payload, name=name,
+            tr('J3M: preparar camada'), _prepare_layer, payload=payload, name=name,
             directory=directory, target_thread=main_thread, on_finished=finished)
         self._task = task
         self.busyChanged.emit(True)
@@ -95,16 +96,16 @@ def _prepare_layer(task, payload, name, directory, target_thread=None):
     if task.isCanceled():
         return None
     if not isinstance(payload, dict):
-        raise ValueError('GeoJSON deve ser um objeto Feature ou FeatureCollection.')
+        raise ValueError(tr('GeoJSON deve ser um objeto Feature ou FeatureCollection.'))
     kind = payload.get('type')
     if kind == 'FeatureCollection':
         features = payload.get('features')
         if not isinstance(features, list):
-            raise ValueError('FeatureCollection sem lista de feições válida.')
+            raise ValueError(tr('FeatureCollection sem lista de feições válida.'))
     elif kind == 'Feature':
         features = [payload]
     else:
-        raise ValueError('GeoJSON deve ser Feature ou FeatureCollection.')
+        raise ValueError(tr('GeoJSON deve ser Feature ou FeatureCollection.'))
     categories = {}
     for feature in features:
         if task.isCanceled():
@@ -112,12 +113,13 @@ def _prepare_layer(task, payload, name, directory, target_thread=None):
         if (not isinstance(feature, dict) or feature.get('type') != 'Feature'
                 or 'geometry' not in feature or 'properties' not in feature
                 or not isinstance(feature['properties'], (dict, type(None)))):
-            raise ValueError('GeoJSON contém uma feição inválida.')
+            raise ValueError(tr('GeoJSON contém uma feição inválida.'))
         geometry = feature['geometry']
         if geometry is not None:
             _validate_geometry(geometry)
         props = feature.get('properties') or {}
         condition = props.get('condition') or {}
+        # Category keys must stay stable when the interface language changes.
         caption = str(condition.get('name') or 'Sem condição') if isinstance(condition, dict) else 'Sem condição'
         color = str(props.get('markerColor') or '#808080')
         categories[caption+' | '+color] = (caption,color)
@@ -141,7 +143,7 @@ def _prepare_layer(task, payload, name, directory, target_thread=None):
             return None
         layer = QgsVectorLayer(str(path)+'|option:FLATTEN_NESTED_ATTRIBUTES=YES', name, 'ogr')
         if not layer.isValid() or layer.featureCount() != len(features):
-            raise ValueError('OGR não conseguiu carregar todas as feições GeoJSON.')
+            raise ValueError(tr('OGR não conseguiu carregar todas as feições GeoJSON.'))
         layer.setCustomProperty('j3m/categories', json.dumps(categories, ensure_ascii=False))
         if task.isCanceled():
             sip.delete(layer)
@@ -196,7 +198,7 @@ def _style_geofence(layer, record):
     })
     layer.setRenderer(QgsSingleSymbolRenderer(symbol))
     layer.setDisplayExpression('"name"')
-    layer.setMapTipTemplate('<div style="padding:6px"><strong>Geocerca: </strong>[% ' + _text('name') + ' %]</div>')
+    layer.setMapTipTemplate('<div style="padding:6px"><strong>' + tr('Geocerca: ') + '</strong>[% ' + _text('name') + ' %]</div>')
     if hasattr(layer, 'setMapTipsEnabled'):
         layer.setMapTipsEnabled(True)
 
@@ -228,12 +230,12 @@ def _style_points(layer):
 
 def _validate_geometry(geometry):
     if not isinstance(geometry, dict):
-        raise ValueError("Geometria GeoJSON inválida.")
+        raise ValueError(tr("Geometria GeoJSON inválida."))
     kind = geometry.get("type")
     if kind == "GeometryCollection":
         geometries = geometry.get("geometries")
         if not isinstance(geometries, list):
-            raise ValueError("GeometryCollection inválida.")
+            raise ValueError(tr("GeometryCollection inválida."))
         for child in geometries:
             _validate_geometry(child)
         return
@@ -246,7 +248,7 @@ def _validate_geometry(geometry):
         "MultiPolygon": 3,
     }
     if kind not in depths:
-        raise ValueError("Tipo de geometria GeoJSON inválido.")
+        raise ValueError(tr("Tipo de geometria GeoJSON inválido."))
     coordinates = geometry.get("coordinates")
     _validate_coordinates(coordinates, depths[kind])
     lines = (
@@ -255,7 +257,7 @@ def _validate_geometry(geometry):
         else []
     )
     if any(len(line) < 2 for line in lines):
-        raise ValueError("LineString deve conter pelo menos duas posições.")
+        raise ValueError(tr("LineString deve conter pelo menos duas posições."))
     polygons = (
         [coordinates] if kind == "Polygon"
         else coordinates if kind == "MultiPolygon"
@@ -265,13 +267,13 @@ def _validate_geometry(geometry):
         for ring in polygon:
             if len(ring) < 4 or ring[0] != ring[-1]:
                 raise ValueError(
-                    "Anel de Polygon deve ser fechado e ter pelo menos quatro posições."
+                    tr("Anel de Polygon deve ser fechado e ter pelo menos quatro posições.")
                 )
 
 
 def _validate_coordinates(value, depth):
     if not isinstance(value, list):
-        raise ValueError("Coordenadas GeoJSON inválidas.")
+        raise ValueError(tr("Coordenadas GeoJSON inválidas."))
     if depth:
         for child in value:
             _validate_coordinates(child, depth - 1)
@@ -279,4 +281,4 @@ def _validate_coordinates(value, depth):
         isinstance(n, bool) or not isinstance(n, (int, float))
         for n in value
     ):
-        raise ValueError("Posição GeoJSON inválida.")
+        raise ValueError(tr("Posição GeoJSON inválida."))

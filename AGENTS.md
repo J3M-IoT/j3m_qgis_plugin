@@ -37,6 +37,8 @@ Before changing code, inspect the actual repository structure, `metadata.txt`, `
 - Worker threads must not touch widgets or QGIS UI objects. Respect PyQGIS thread-safety constraints around project/layer access; perform relevant mutations on the main thread.
 - Provide clear feedback for loading, progress, cancellation, errors, empty results, and success. Cancellation must not leave the project in an inconsistent state.
 - Respect localization, basic accessibility, high-DPI scaling, light/dark themes, and native QGIS interface conventions. Do not hardcode fonts, colors, or dimensions without a concrete reason.
+- **Always maintain complete plugin translations in Brazilian Portuguese (`pt-br`), US English (`en-us`), and Spain Spanish (`es-es`).** Every new or changed user-facing text must be covered in all three languages in the same change, including menus, dialogs, accessibility text, progress, errors, charts, tooltips, legends, and generated reports. Use the existing translation helper and catalogs; keep format placeholders consistent and include the catalogs in distribution packages.
+- Follow the QGIS interface language by default, preserve the user's persistent manual language selection, and provide English fallback for unsupported locales or missing translations. Preserve locale normalization and the `X-Locale` / `Accept-Language` headers expected by the backend. Translate display text and documented enum labels without changing API keys, identifiers, stored observations, or user-provided names.
 - Prefer Qt layouts over fixed positioning. Never assume a specific screen resolution or operating system.
 - Prevent duplicate signal connections, orphan dialogs, and persistent references that cause resource leaks.
 
@@ -46,6 +48,7 @@ Before changing code, inspect the actual repository structure, `metadata.txt`, `
 - Continue using QGIS authentication facilities (`QgsAuthManager` and supported integration methods) where applicable. **Never** expose tokens, passwords, credentials, or authorization headers in logs, printed output, error messages, URLs, version-controlled files, or user-visible exceptions.
 - Do not embed API secrets, invent insecure credential stores, or request sensitive credentials in diagnostic logs.
 - Use HTTPS and handle HTTP errors, malformed responses, timeouts, connectivity failures, expired authentication, server limits, and partial responses. Avoid aggressive retries; add bounded retries and backoff only when appropriate.
+- **The default timeout is 60 seconds (1 minute) per HTTP request.** Keep `j3m_connect/config.json` (`timeout_seconds`) and the fallback in `settings.configured_timeout_seconds()` aligned with this default. Honor the configured timeout, including `-1` to disable it; do not introduce a separate hardcoded deadline or change the global QGIS timeout.
 - Do not impose a plugin-defined response/transfer size cap. Large responses must remain supported; use asynchronous processing, cancellation, and efficient memory handling.
 - Explicitly handle CRS/EPSG identifiers, coordinate transformations, axis order, longitude/latitude, empty geometries, and null attributes. Do not assume source coordinates are already in the project CRS.
 - Identify and document the source CRS before creating layers. Never silently reinterpret coordinates or transform them without the correct QGIS APIs.
@@ -90,6 +93,7 @@ For each change, run all available relevant tests and add regression coverage wh
 6. Disabling/re-enabling and reloading the plugin does not duplicate UI components or leave dangling tasks and signal connections.
 7. Metadata and distributable ZIP structure satisfy repository rules whenever packaging is involved.
 8. If QGIS 3.x compatibility is claimed, repeat the applicable tests on each supported legacy target; test Windows, Linux, and macOS when infrastructure permits.
+9. Verify translation coverage and format placeholders in all three required languages, QGIS language detection, persistent manual selection, English fallback, API locale headers, translated empty responses, and language switching without duplicated UI components or loss of project layers.
 
 Use unit tests for pure logic and data transformations, integration tests for PyQGIS/network behavior, and real QGIS runs for UI workflows. Never fabricate test results or claim a test passed without running it. If QGIS is unavailable, state this limitation and run the feasible static checks, including `python -m compileall` when useful.
 

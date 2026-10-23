@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Select catalog geofences and load each one as an independent layer."""
+from .i18n import tr
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtWidgets import (
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
@@ -21,28 +22,28 @@ class GeofencesPage(QWidget):
         self.loaded = False
         self.busy = False
         layout = QVBoxLayout(self)
-        title = QLabel('Geocercas no mapa')
+        title = QLabel(tr('Geocercas no mapa'))
         title.setStyleSheet('font-size: 20px; font-weight: bold;')
         layout.addWidget(title)
-        layout.addWidget(QLabel('Marque as geocercas que deseja adicionar. Cada uma será uma camada separada.'))
+        layout.addWidget(QLabel(tr('Marque as geocercas que deseja adicionar. Cada uma será uma camada separada.')))
         self.search = QLineEdit()
-        self.search.setPlaceholderText('Buscar geocercas por nome ou UUID…')
+        self.search.setPlaceholderText(tr('Buscar geocercas por nome ou UUID…'))
         layout.addWidget(self.search)
-        self.refreshButton = QPushButton('Atualizar geocercas')
+        self.refreshButton = QPushButton(tr('Atualizar geocercas'))
         layout.addWidget(self.refreshButton)
         self.records = QListWidget()
         layout.addWidget(self.records, 1)
         actions = QHBoxLayout()
-        self.selectButton = QPushButton('Marcar todas as visíveis')
-        self.clearButton = QPushButton('Desmarcar todas')
+        self.selectButton = QPushButton(tr('Marcar todas as visíveis'))
+        self.clearButton = QPushButton(tr('Desmarcar todas'))
         actions.addWidget(self.selectButton)
         actions.addWidget(self.clearButton)
         layout.addLayout(actions)
         self.selectionLabel = QLabel()
         layout.addWidget(self.selectionLabel)
-        self.addButton = QPushButton('Adicionar selecionadas ao QGIS')
+        self.addButton = QPushButton(tr('Adicionar selecionadas ao QGIS'))
         layout.addWidget(self.addButton)
-        self.status = QLabel('Atualize a lista para consultar as geocercas.')
+        self.status = QLabel(tr('Atualize a lista para consultar as geocercas.'))
         self.status.setTextFormat(Qt.TextFormat.PlainText)
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
@@ -68,7 +69,7 @@ class GeofencesPage(QWidget):
         self.records.clear()
         self.search.clear()
         self._selection_changed()
-        self.status.setText('Atualize a lista para consultar as geocercas.')
+        self.status.setText(tr('Atualize a lista para consultar as geocercas.'))
 
     def cancel(self):
         self._queue = []
@@ -77,7 +78,7 @@ class GeofencesPage(QWidget):
         self._set_busy(False)
 
     def refresh(self):
-        self.status.setText('Carregando geocercas…')
+        self.status.setText(tr('Carregando geocercas…'))
         self.api.get('catalog', scope='geofences')
 
     def _items(self):
@@ -105,7 +106,7 @@ class GeofencesPage(QWidget):
         self.records.blockSignals(False)
         self.loaded = True
         self._filter()
-        self.status.setText('{} geocerca(s) disponível(is).'.format(len(records)))
+        self.status.setText(tr('{} geocerca(s) disponível(is).').format(len(records)))
 
     def _filter(self):
         needle = self.search.text().strip().casefold()
@@ -125,7 +126,7 @@ class GeofencesPage(QWidget):
     def _selection_changed(self, *_):
         selected = [item for item in self._items() if item.checkState() == Qt.CheckState.Checked]
         hidden = sum(item.isHidden() for item in selected)
-        self.selectionLabel.setText('{} selecionada(s), incluindo {} fora do filtro.'.format(len(selected), hidden))
+        self.selectionLabel.setText(tr('{} selecionada(s), incluindo {} fora do filtro.').format(len(selected), hidden))
         self.addButton.setEnabled(bool(selected) and not self.busy)
 
     def _set_busy(self, busy):
@@ -149,8 +150,8 @@ class GeofencesPage(QWidget):
     def _next_layer(self):
         if not self._queue:
             self._set_busy(False)
-            self.status.setText('{} geocerca(s) adicionada(s).'.format(self._added)+
-                ('\nNão foi possível adicionar:\n'+'\n'.join(self._errors) if self._errors else ''))
+            self.status.setText(tr('{} geocerca(s) adicionada(s).').format(self._added)+
+                (tr('\nNão foi possível adicionar:\n')+'\n'.join(self._errors) if self._errors else ''))
             return
         record = self._queue.pop(0)
         try:
@@ -167,5 +168,5 @@ class GeofencesPage(QWidget):
                 self.iface.setActiveLayer(layer)
                 self.iface.actionMapTips().setChecked(True)
             self._next_layer()
-        self.status.setText('Preparando '+record['name']+'…')
+        self.status.setText(tr('Preparando ')+record['name']+'…')
         self.layerLoader.load(payload,'J3M — '+record['name'],finish,geofence=True)

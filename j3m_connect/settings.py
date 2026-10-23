@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Explicit URL configuration and secure QGIS credential storage."""
+from .i18n import tr
 
 import json
 from pathlib import Path
@@ -32,9 +33,9 @@ def configured_api_url():
 
 
 def configured_timeout_seconds():
-    value = _configuration().get("timeout_seconds", 30)
+    value = _configuration().get("timeout_seconds", 60)
     if type(value) is not int or (value != -1 and not 1 <= value <= 2147483):
-        raise ValueError("timeout_seconds deve ser um inteiro positivo (até 2147483) ou -1 para desabilitar.")
+        raise ValueError(tr("timeout_seconds deve ser um inteiro positivo (até 2147483) ou -1 para desabilitar."))
     return value
 
 
@@ -50,8 +51,8 @@ def validate_url(value):
         or url.hasFragment()
     ):
         raise ValueError(
-            "Configuração de conexão do plugin inválida. "
-            "Contate o responsável pelo plugin."
+            tr("Configuração de conexão do plugin inválida. "
+            "Contate o responsável pelo plugin.")
         )
 
     if (
@@ -59,8 +60,8 @@ def validate_url(value):
         and url.host().lower() not in ("localhost", "127.0.0.1", "::1")
     ):
         raise ValueError(
-            "Configuração de conexão do plugin insegura. "
-            "Contate o responsável pelo plugin."
+            tr("Configuração de conexão do plugin insegura. "
+            "Contate o responsável pelo plugin.")
         )
 
     return url.toString(
@@ -81,7 +82,7 @@ def _manager():
 
     if manager.isDisabled() or not manager.setMasterPassword(True):
         raise ValueError(
-            "Desbloqueie o cofre de autenticação do QGIS para continuar."
+            tr("Desbloqueie o cofre de autenticação do QGIS para continuar.")
         )
 
     return manager
@@ -96,13 +97,13 @@ def _load(authcfg):
         True,
     ):
         raise ValueError(
-            "Credenciais indisponíveis no cofre QGIS. "
-            "Salve a configuração novamente."
+            tr("Credenciais indisponíveis no cofre QGIS. "
+            "Salve a configuração novamente.")
         )
 
     if config.method() != "Basic":
         raise ValueError(
-            "Configuração de autenticação incompatível com J3M Connect."
+            tr("Configuração de autenticação incompatível com J3M Connect.")
         )
 
     return config
@@ -113,7 +114,7 @@ def credentials():
 
     if not authcfg:
         raise ValueError(
-            "Configuração incompleta. Salve Client ID e Client Secret."
+            tr("Configuração incompleta. Salve Client ID e Client Secret.")
         )
 
     url = validate_url(url)
@@ -130,7 +131,7 @@ def credentials():
 def _validate_credentials(client_id, secret):
     if not client_id.strip() or not secret.strip():
         raise ValueError(
-            "Informe Client ID e Client Secret."
+            tr("Informe Client ID e Client Secret.")
         )
 
     if any(
@@ -138,7 +139,7 @@ def _validate_credentials(client_id, secret):
         for char in client_id + secret
     ):
         raise ValueError(
-            "As credenciais não podem conter caracteres de controle."
+            tr("As credenciais não podem conter caracteres de controle.")
         )
 
 
@@ -151,7 +152,7 @@ def save(client_id, secret):
     if not secret and authcfg:
         previous = _load(authcfg)
         if previous.config("username") != client_id:
-            raise ValueError("Informe o Client Secret ao trocar o Client ID.")
+            raise ValueError(tr("Informe o Client Secret ao trocar o Client ID."))
         secret = previous.config("password")
 
     _validate_credentials(client_id, secret)
@@ -173,7 +174,7 @@ def save(client_id, secret):
 
     if not success:
         raise ValueError(
-            "Não foi possível salvar as credenciais no cofre QGIS."
+            tr("Não foi possível salvar as credenciais no cofre QGIS.")
         )
 
     settings = QgsSettings()
@@ -192,7 +193,7 @@ def remove():
         and not _manager().removeAuthenticationConfig(authcfg)
     ):
         raise ValueError(
-            "Não foi possível remover as credenciais do cofre QGIS."
+            tr("Não foi possível remover as credenciais do cofre QGIS.")
         )
 
     QgsSettings().remove(PREFIX.rstrip("/"))

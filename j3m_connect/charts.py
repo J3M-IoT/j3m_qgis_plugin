@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Small native Qt plot: no QtCharts, WebEngine or external dependency."""
+from .i18n import tr
 from datetime import datetime, timezone
 from .analysis import series_plot
 from qgis.PyQt.QtCore import Qt, QPointF, QRectF, pyqtSignal
@@ -18,8 +19,8 @@ class SeriesChart(QWidget):
         self.caption = ''
         self.plot = None
         self.setMinimumHeight(210)
-        self.setAccessibleName('Série temporal UTC; clique para selecionar uma coleta no mapa')
-        self.setToolTip('Cada cor é uma série de dispositivo. Clique em um ponto para selecionar a coleta. Datas em UTC.')
+        self.setAccessibleName(tr('Série temporal UTC; clique para selecionar uma coleta no mapa'))
+        self.setToolTip(tr('Cada cor é uma série de dispositivo. Clique em um ponto para selecionar a coleta. Datas em UTC.'))
 
     def set_series(self, points, caption, prepared=None):
         self.points = points
@@ -33,7 +34,7 @@ class SeriesChart(QWidget):
         palette = self.palette()
         painter.fillRect(self.rect(), palette.brush(QPalette.ColorRole.Base))
         painter.setPen(palette.color(QPalette.ColorRole.Text))
-        painter.drawText(QRectF(10, 5, self.width()-20, 30), Qt.AlignmentFlag.AlignLeft, self.caption or 'Carregue coletas e escolha uma métrica.')
+        painter.drawText(QRectF(10, 5, self.width()-20, 30), Qt.AlignmentFlag.AlignLeft, self.caption or tr('Carregue coletas e escolha uma métrica.'))
         self.positions = []
         if not self.plot:
             return
@@ -70,7 +71,7 @@ class SeriesChart(QWidget):
                 self.positions.append((x, y, point[2]))
                 previous = (point[0], pos, point[4])
         if self.plot['reduced']:
-            painter.drawText(left, top+15, 'Visualização reduzida; estatísticas usam todas as coletas.')
+            painter.drawText(left, top+15, tr('Visualização reduzida; estatísticas usam todas as coletas.'))
 
     def mousePressEvent(self, event):
         pos = event.position() if hasattr(event, 'position') else event.localPos()

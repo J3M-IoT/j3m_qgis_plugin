@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Native QGIS styling, temporal metadata and portable study exports."""
+from .i18n import tr
 import hashlib
 import json
 from datetime import datetime, timezone
@@ -33,8 +34,8 @@ def provenance(scope, record, period, payload=None, digest=None):
             'period': period or [record.get('startDate'), record.get('endDate')],
             'downloaded_at': datetime.now(timezone.utc).isoformat(),
             'sha256': digest,
-            'hash_format': 'JSON UTF-8, chaves ordenadas, ensure_ascii=False, separadores padrão Python',
-            'note': 'Snapshot; indicadores podem excluir o instante final e incluir coletas sem GPS.'}
+            'hash_format': tr('JSON UTF-8, chaves ordenadas, ensure_ascii=False, separadores padrão Python'),
+            'note': tr('Snapshot; indicadores podem excluir o instante final e incluir coletas sem GPS.')}
 
 
 def configure_layer(layer, origin, units=None, preserve_style=False):
@@ -45,7 +46,7 @@ def configure_layer(layer, origin, units=None, preserve_style=False):
     for i, field in enumerate([] if preserve_style else layer.fields()):
         key = field.name().removeprefix('collects_').removesuffix('_value')
         unit = (units or {}).get(key, UNITS.get(key, ''))
-        alias = LABELS.get(key, field.name())
+        alias = tr(LABELS.get(key, field.name()))
         layer.setFieldAlias(i, alias + (' (' + unit + ')' if unit else ''))
     if not preserve_style and layer.fields().indexFromName('collectedAt') >= 0:
         temporal = layer.temporalProperties()
@@ -70,7 +71,7 @@ def metric_field(layer, metric):
     for candidate in ('collects_' + metric, 'collects_' + metric + '_value'):
         if layer.fields().indexFromName(candidate) >= 0:
             return candidate
-    raise ValueError('A camada não possui a métrica selecionada.')
+    raise ValueError(tr('A camada não possui a métrica selecionada.'))
 
 
 def style_metric(layer, metric, minimum=None, maximum=None, unit='', size=3.0, stats=None, categories=None):
@@ -95,14 +96,15 @@ def style_metric(layer, metric, minimum=None, maximum=None, unit='', size=3.0, s
                     symbol=layer.renderer().symbol().clone()
                     candidate=QColor(color)
                     symbol.setColor(candidate if candidate.isValid() else QColor('#808080'))
-                    entries.append(QgsRendererCategory(key,symbol,name+' · '+color))
+                    caption = tr('Sem condição') if name == 'Sem condição' else name
+                    entries.append(QgsRendererCategory(key,symbol,caption+' · '+color))
                 expression='concat(coalesce("condition_name", \'Sem condição\'), \' | \', coalesce("markerColor", \'#808080\'))'
                 layer.setRenderer(QgsCategorizedSymbolRenderer(expression,entries))
         layer.removeCustomProperty('j3m/style')
         layer.triggerRepaint()
         return
     if layer.geometryType() != POINT_TYPE:
-        raise ValueError('Escolha uma camada de pontos J3M.')
+        raise ValueError(tr('Escolha uma camada de pontos J3M.'))
     field = metric_field(layer, metric)
     index = layer.fields().indexFromName(field)
     from .analysis import number
@@ -110,11 +112,11 @@ def style_metric(layer, metric, minimum=None, maximum=None, unit='', size=3.0, s
         values = [f[index] for f in layer.getFeatures() if number(f[index])]
         stats = {'n':len(values), 'min':min(values) if values else None, 'max':max(values) if values else None}
     if not stats['n']:
-        raise ValueError('Não há valores numéricos válidos nesta métrica.')
+        raise ValueError(tr('Não há valores numéricos válidos nesta métrica.'))
     lo = stats['min'] if minimum is None else minimum
     hi = stats['max'] if maximum is None else maximum
     if hi < lo:
-        raise ValueError('O máximo deve ser maior ou igual ao mínimo.')
+        raise ValueError(tr('O máximo deve ser maior ou igual ao mínimo.'))
     root = QgsRuleBasedRenderer.Rule(None)
     quoted = QgsExpression.quotedColumnRef(field)
     colors = ['#416e9d', '#7ea3b4', '#c5c68c', '#dca263', '#b85738']
@@ -130,9 +132,9 @@ def style_metric(layer, metric, minimum=None, maximum=None, unit='', size=3.0, s
             a, b = lo+(hi-lo)*i/5, lo+(hi-lo)*(i+1)/5
             rule(f'{quoted} >= {a!r} AND {quoted} {"<=" if i == 4 else "<"} {b!r}',
                  f'{a:.2f} – {b:.2f} {unit}', color)
-    rule(f'{quoted} < {lo!r}', f'Abaixo de {lo:g} {unit}', '#263b67')
-    rule(f'{quoted} > {hi!r}', f'Acima de {hi:g} {unit}', '#782e35')
-    rule(f'{quoted} IS NULL', 'Sem valor', '#999999')
+    rule(f'{quoted} < {lo!r}', tr('Abaixo de ') + f'{lo:g} {unit}', '#263b67')
+    rule(f'{quoted} > {hi!r}', tr('Acima de ') + f'{hi:g} {unit}', '#782e35')
+    rule(f'{quoted} IS NULL', tr('Sem valor'), '#999999')
     layer.setRenderer(QgsRuleBasedRenderer(root))
     layer.setCustomProperty('j3m/style', json.dumps({'metric':metric,'min':lo,'max':hi,'unit':unit,'size':size}))
     layer.triggerRepaint()
@@ -141,7 +143,7 @@ def style_metric(layer, metric, minimum=None, maximum=None, unit='', size=3.0, s
 def export_options(layer, filename, driver):
     source = Path(layer.source().split('|')[0])
     if source.resolve() == Path(filename).resolve():
-        raise ValueError('Escolha outro arquivo; a exportação não pode sobrescrever a origem da camada.')
+        raise ValueError(tr('Escolha outro arquivo; a exportação não pode sobrescrever a origem da camada.'))
     options = QgsVectorFileWriter.SaveVectorOptions()
     options.driverName = driver
     options.fileEncoding = 'UTF-8'
@@ -164,7 +166,7 @@ def export_layer(layer, filename, driver):
     result = QgsVectorFileWriter.writeAsVectorFormatV3(layer, str(filename), QgsProject.instance().transformContext(), options)
     error_enum = QgsVectorFileWriter.WriterError if hasattr(QgsVectorFileWriter,'WriterError') else QgsVectorFileWriter
     if result[0] != error_enum.NoError:
-        raise ValueError('Falha ao exportar: ' + str(result[1]))
+        raise ValueError(tr('Falha ao exportar: ') + str(result[1]))
     export_sidecars(layer, filename)
 
 
@@ -197,7 +199,7 @@ def portable_study(layer, directory, exported=False, original_copied=False):
         export_layer(layer, path, 'GPKG')
     copy = QgsVectorLayer(str(path) + '|layername=coletas', layer.name(), 'ogr')
     if not copy.isValid():
-        raise ValueError('Não foi possível reabrir o GeoPackage exportado.')
+        raise ValueError(tr('Não foi possível reabrir o GeoPackage exportado.'))
     copy.loadNamedStyle(str(path.with_suffix('.qml')))
     for key in ('j3m/origin', 'j3m/units', 'j3m/style'):
         copy.setCustomProperty(key, layer.customProperty(key, ''))
@@ -208,14 +210,14 @@ def portable_study(layer, directory, exported=False, original_copied=False):
     if hasattr(project,'setFilePathStorage'):
         project.setFilePathStorage(Qgis.FilePathType.Relative)
     if not project.write():
-        raise ValueError('Não foi possível salvar o projeto portátil.')
+        raise ValueError(tr('Não foi possível salvar o projeto portátil.'))
     source = Path(layer.source().split('|')[0])
     if not original_copied and source.suffix.lower() in ('.json','.geojson') and source.is_file():
         import shutil
         shutil.copyfile(source, directory/'origem.geojson')
-    (directory/'LEIA-ME.txt').write_text('Snapshot J3M. Abra estudo.qgz no QGIS.\n'
+    (directory/'LEIA-ME.txt').write_text(tr('Snapshot J3M. Abra estudo.qgz no QGIS.\n'
         'O pacote contém a camada selecionada, estilo e procedência; não contém credenciais.\n'
-        'Consulte coletas.gpkg.origem.json para período, fuso e data do download.\n', encoding='utf-8')
+        'Consulte coletas.gpkg.origem.json para período, fuso e data do download.\n'), encoding='utf-8')
     return directory / 'estudo.qgz'
 
 
@@ -238,9 +240,9 @@ def report_pdf(layer, filename, summary, on_finished=None):
         error = None
         try:
             if job.property('j3mCanceled'):
-                raise ValueError('PDF cancelado.')
+                raise ValueError(tr('PDF cancelado.'))
             if job.errors():
-                raise ValueError('Falha ao renderizar o mapa do PDF.')
+                raise ValueError(tr('Falha ao renderizar o mapa do PDF.'))
             _write_report(layer, filename, summary, job, directory.name)
         except (ValueError, OSError, RuntimeError) as caught:
             error = caught
@@ -273,21 +275,21 @@ def _write_report(layer, filename, summary, job, directory):
         if len(supplied)==1:
             units[metric]=next(iter(supplied))
         elif len(supplied)>1:
-            units[metric]='Unidades conflitantes'
+            units[metric]=tr('Unidades conflitantes')
     rows = ''.join('<tr>' + ''.join('<td>'+escape(display(v))+'</td>' for v in
-        (key, units.get(key,UNITS.get(key,'')), value['n'],value['min'],value['mean'],value['median'],value['max']))+'</tr>'
+        (tr(LABELS.get(key, key)), units.get(key,UNITS.get(key,'')), value['n'],value['min'],value['mean'],value['median'],value['max']))+'</tr>'
         for key,value in summary['stats'].items())
     legend = '<table>'+''.join('<tr><td bgcolor="'+item.symbol().color().name()+'">&nbsp;&nbsp;&nbsp;</td><td>'+
-        escape(item.label() or 'Condição original J3M')+'</td></tr>' for item in layer.renderer().legendSymbolItems())+'</table>'
+        escape(item.label() or tr('Condição original J3M'))+'</td></tr>' for item in layer.renderer().legendSymbolItems())+'</table>'
     document = QTextDocument()
     document.setHtml('<style>body{font-family:sans-serif;color:#203b48}td,th{padding:5px}h1{color:#087f8c}</style>'
-        '<h1>J3M • Relatório de campanha</h1><h2>'+escape(layer.name())+'</h2>'
+        '<h1>J3M • '+escape(tr('Relatório de campanha'))+'</h1><h2>'+escape(layer.name())+'</h2>'
         '<img width="660" src="'+image.as_uri()+'"/><p>'+legend+'</p>'
-        '<p>Mapa: somente a camada selecionada. Coordenadas: '+escape(layer.crs().authid())+'.</p>'
-        '<h2>Observações baixadas</h2><table border="1" cellspacing="0"><tr><th>Métrica</th><th>Unidade</th><th>n</th>'
-        '<th>Mín.</th><th>Média</th><th>Mediana</th><th>Máx.</th></tr>'+rows+'</table>'
-        '<p>Estatísticas por registro georreferenciado; não representam duração de exposição. '
-        'Nenhuma classificação científica nova foi aplicada.</p><h2>Procedência</h2><p>'+
+        '<p>'+escape(tr('Mapa: somente a camada selecionada. Coordenadas: '))+escape(layer.crs().authid())+'.</p>'
+        '<h2>'+escape(tr('Observações baixadas'))+'</h2><table border="1" cellspacing="0"><tr>'+
+        ''.join('<th>'+escape(tr(title))+'</th>' for title in (tr('Métrica'),tr('Unidade'),'n',tr('Mín.'),tr('Média'),tr('Mediana'),tr('Máx.')))+
+        '</tr>'+rows+'</table><p>'+escape(tr('Estatísticas por registro georreferenciado; não representam duração de exposição. '
+        'Nenhuma classificação científica nova foi aplicada.'))+'</p><h2>'+escape(tr('Procedência'))+'</h2><p>'+
         escape(origin).replace(',', ',<br/>')+'</p>')
     printer = QPrinter(QPrinter.PrinterMode.HighResolution)
     printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)

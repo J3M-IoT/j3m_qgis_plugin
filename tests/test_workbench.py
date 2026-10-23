@@ -29,6 +29,9 @@ def fixture():
 class WorkbenchTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        language_patch = patch("j3m_connect.i18n._language", "pt-br")
+        language_patch.start()
+        cls.addClassCleanup(language_patch.stop)
         cls.app = QgsApplication.instance() or QgsApplication([],False)
         cls.app.initQgis()
 

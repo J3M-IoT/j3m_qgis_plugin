@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """QGIS action and dialog lifecycle."""
+from .i18n import tr
+from .i18n import initialize
 
 from pathlib import Path
 
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.core import QgsSettings
 from qgis.core import Qgis
 try:
@@ -25,6 +27,7 @@ class J3MConnect:
     def initGui(self):
         if self.action is not None:
             return
+        initialize()
         self.action = QAction(
             QIcon(str(Path(__file__).with_name("j3m-logo.jpeg"))),
             "J3M Connect", self.iface.mainWindow(),
@@ -32,7 +35,7 @@ class J3MConnect:
         self.action.triggered.connect(self.run)
         self.iface.addPluginToMenu("&J3M Connect", self.action)
         self.iface.addToolBarIcon(self.action)
-        self.inspectAction = QAction('Analisar camada no J3M',self.iface.mainWindow())
+        self.inspectAction = QAction(tr('Analisar camada no J3M'),self.iface.mainWindow())
         self.inspectAction.triggered.connect(self.inspect_active)
         if hasattr(Qgis,'LayerType'):
             vector = Qgis.LayerType.Vector
@@ -49,6 +52,7 @@ class J3MConnect:
     def run(self):
         if self.dialog is None:
             self.dialog = J3MDialog(self.iface)
+            self.dialog.languageChanged.connect(self._queue_language_change)
             self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dialog)
             preferences = QgsSettings()
             self.dialog.setFloating(preferences.value('J3MConnect/floating',False,type=bool))
@@ -62,6 +66,23 @@ class J3MConnect:
         self.dialog.show()
         self.dialog.raise_()
         self.dialog.activateWindow()
+
+    def _queue_language_change(self):
+        # Let the button's signal finish before destroying its owning dock.
+        source = self.dialog
+        QTimer.singleShot(0, lambda: self._apply_language(source))
+
+    def _apply_language(self, source):
+        if self.dialog is None or self.dialog is not source:
+            return
+        self.dialog.close()
+        self.dialog.dispose()
+        self.iface.removeDockWidget(self.dialog)
+        self.dialog.deleteLater()
+        self.dialog = None
+        self.inspectAction.setText(tr('Analisar camada no J3M'))
+        self.run()
+        self.dialog._select_menu('language')
 
     def unload(self):
         if self.inspectAction is not None:

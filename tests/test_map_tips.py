@@ -1,6 +1,7 @@
 """Run with the QGIS Python interpreter, with QT_QPA_PLATFORM=offscreen."""
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -14,6 +15,9 @@ from j3m_connect.map_tips import configure_map_tip
 class MapTipTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        language_patch = patch("j3m_connect.i18n._language", "pt-br")
+        language_patch.start()
+        cls.addClassCleanup(language_patch.stop)
         cls.app = QgsApplication.instance() or QgsApplication([], False)
         cls.app.initQgis()
 

@@ -8,7 +8,7 @@ Plugin Python/PyQGIS para consultar os dados existentes na public_api J3M, carre
 - Faixa declarada preservada: **QGIS 3.28 a 4.99**. A compatibilidade é indicada por essa faixa; a flag obsoleta `supportsQt6` foi removida.
 - Interface por `qgis.PyQt`, enums com escopo e QAction adaptado a Qt5/Qt6. Sem dependências de pip, QtCharts, WebEngine, pandas ou matplotlib.
 - Usa OGR, autenticação, controle temporal e exportadores fornecidos pelo QGIS.
-- Execução verificada em **QGIS 3.44.13 e 3.44.15 / Qt 5.15.13 / Windows** e **QGIS 4.2.2 / Qt 6.10.2 / Linux em Docker**, com 44 testes. QGIS 3.28 não foi executado; a faixa declarada não equivale a teste de cada versão intermediária.
+- Tradução e fluxos existentes verificados com **56 testes em QGIS 3.44.15 / Qt 5.15.13 / Windows** e **QGIS 4.2.2 / Qt 6.10.2 / Linux em Docker**, sem credenciais reais. A execução anterior em QGIS 3.44.13 tinha 44 testes. QGIS 3.28 não foi executado; a faixa declarada não equivale a teste de cada versão intermediária.
 - Gere o ZIP com `python scripts/package.py` (Python 3; o empacotamento não importa QGIS).
 
 ## Conexão
@@ -20,6 +20,14 @@ QgsSettings guarda o identificador do cofre e preferências da interface. A inte
 A distribuição lê somente `j3m_connect/config.json`, com `api_url` e `timeout_seconds`. Não usa .env. Não inclua versão, rota, query, fragmento ou credenciais na URL base. HTTPS é obrigatório, exceto localhost/loopback para desenvolvimento. Timeout: inteiro positivo até 2147483, ou -1 para desabilitar. Redirecionamentos são recusados; configure a URL final. Não há teto de bytes da resposta imposto pelo plugin.
 
 ## Consultar e carregar
+
+### Idioma
+
+O plugin segue o idioma da interface do QGIS e oferece português do Brasil (`pt-br`), inglês dos Estados Unidos (`en-us`) e espanhol da Espanha (`es-es`). Quando o idioma não existe nos catálogos do backend, usa inglês. Os códigos básicos `pt`, `en` e `es` do QGIS correspondem a esses três catálogos.
+
+Em **Configurações → Idioma**, escolha **Automático (QGIS)** ou um dos idiomas e clique em **Aplicar idioma**. A preferência fica salva no perfil QGIS. Aplicar reinicia o painel e cancela consultas pendentes, preservando as camadas do projeto. Menus, mensagens, gráficos, novos tooltips, aliases, legendas e relatórios usam a tradução escolhida. Snapshots e arquivos já gerados mantêm os textos gravados; nomes e observações fornecidos pelo usuário não são traduzidos pelo plugin. Os seletores nativos de arquivos seguem o sistema/QGIS.
+
+Todas as requisições enviam `X-Locale` e `Accept-Language`, conforme o middleware `SetLocale` da public_api. O backend traduz os campos que seu contrato prevê. As respostas vazias traduzidas são reconhecidas nos três idiomas; corpos de erro remotos continuam sem exposição na interface.
 
 O painel pode ser acoplado ou flutuar; **Menu** recolhe a navegação. Usa a paleta Qt, incluindo tema claro/escuro, e lembra a posição flutuante.
 

@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Read-only summaries of downloaded observations. No server business rules."""
+from .i18n import tr
 import math
 from collections import Counter, defaultdict
 from datetime import datetime
@@ -77,7 +78,7 @@ def summarize(payload, canceled=None):
         if identifier is not None:
             ids[str(identifier)] += 1
         device = prop.get('device') or {}
-        device_name = str(device.get('name') or device.get('uuid') or 'Sem dispositivo')
+        device_name = str(device.get('name') or device.get('uuid') or tr('Sem dispositivo'))
         device_id = str(device.get('uuid') or device.get('_id') or device.get('id') or device_name)
         ordinal = device_order[device_id]
         device_order[device_id] += 1
@@ -87,7 +88,7 @@ def summarize(payload, canceled=None):
                 value = device_name
             elif isinstance(value, dict):
                 value = value.get('name') or value.get('description') or value.get('color')
-            distributions[key][str(value if value is not None else 'Não informado')] += 1
+            distributions[key][str(value if value is not None else tr('Não informado'))] += 1
         for metric, value in metric_values(prop).items():
             metrics[metric]  # Include a metric even if every observation is null.
             raw = (prop.get('collects') or {}).get(metric)
